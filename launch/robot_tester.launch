@@ -1,0 +1,17 @@
+<launch>
+    <param name="robot_description"
+        command="xacro '$(find bpl_bravo_description_real)/urdf/mk2/bravo_7_mk2_header.urdf.xacro'" />
+  <!-- load URDF, SRDF and joint_limits configuration -->
+  <include file="$(find bpl_bravo_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="false" />
+    <arg name="with_force_torque_sensor" value="true"/>
+    <arg name="with_base_hand" value="false"/>
+    <arg name="with_camera" value="false"/>
+    <arg name="with_rigid_peg" value="false"/>
+  </include>
+  <node name="robot_tester"
+        pkg="bravo_controllers"
+        type="robot_tester"
+        respawn="false" output="screen">
+  </node>
+</launch>
