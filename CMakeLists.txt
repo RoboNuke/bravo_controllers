@@ -150,6 +150,14 @@ target_link_libraries(moveit_test
   ${Boost_LIBRARIES}
   #${PROJECT_NAME}
 )
+
+add_executable(gravity_comp_controller src/bravo_gravity_comp.cpp)
+target_link_libraries(gravity_comp_controller
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${PROJECT_NAME}
+)
+
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure

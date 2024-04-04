@@ -108,11 +108,11 @@ std::vector<double> Robot::getTorques(bool with_accel){
     dyn_solver_->getTorques(
         angles, vels, accels, wrenches, torques
     );
-    std::cout << "Torques: [";
+    /*std::cout << "Torques: [";
     for(int i = 0; i < n; i++){
         std::cout << torques[i] << ", ";
     }
-    std::cout << "\b]" << std::endl;
+    std::cout << "\b]" << std::endl;*/
     return torques;
 }
 

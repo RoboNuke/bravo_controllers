@@ -5,14 +5,14 @@ namespace bravo_controllers{
 BravoGravityComp::BravoGravityComp(ros::NodeHandle nh):
     nh_(nh), running_(false)
 {
-    jnt_state_sub_ = nh_.subscribe("/joint_states", 1, &BravoGravityComp::jntStateCallback, this);
-    eff_cmd_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("/effort_cmd", 1);
+    jnt_state_sub_ = nh_.subscribe("joint_states", 1, &BravoGravityComp::jntStateCallback, this);
+    eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>("arm_effort_controller", 1);
 
     // create client to controller_manager srv for swapping controller
     controller_switch_client_  = nh_.serviceClient
-        <controller_manager_msgs::SwitchController>("controller_switcher");
+        <controller_manager_msgs::SwitchController>("controller_manager/switch_controller");
     controller_list_client_  = nh_.serviceClient
-        <controller_manager_msgs::ListControllers>("controller_list");
+        <controller_manager_msgs::ListControllers>("controller_manager/list_controllers");
 
     // advertise service to turn on and off this controller
     toggle_srv_ = nh_.advertiseService("toggle_gravity_comp_controller",
@@ -22,22 +22,27 @@ BravoGravityComp::BravoGravityComp(ros::NodeHandle nh):
 }
 
 void BravoGravityComp::jntStateCallback(sensor_msgs::JointState msg){
-    std::cout << "Coming to a compiler near you" << std::endl;
     robot_.setState(msg);
-
     if( running_ ){
         // get gravity torques
         std::vector<double> g = robot_.getGravity();
         // publish effort commands
-        trajectory_msgs::JointTrajectory jntTraj;
-        jntTraj.header.stamp = ros::Time::now();
+        //trajectory_msgs::JointTrajectory jntTraj;
+        //jntTraj.header.stamp = ros::Time::now();
         //jntTraj.header.frame_id = "bravo_base_link";
-        jntTraj.joint_names = robot_.joint_names_;
-        trajectory_msgs::JointTrajectoryPoint jntTrajPt;
+        //jntTraj.joint_names = robot_.joint_names_;
+        //trajectory_msgs::JointTrajectoryPoint jntTrajPt;
         // convert to mA and store
-        jntTrajPt.effort = robot_.torqueToCurrent(g);
-        jntTraj.points.push_back(jntTrajPt);
-        //eff_cmd_pub.publish(jntTraj);
+        //jntTrajPt.effort = robot_.torqueToCurrent(g);
+        std_msgs::Float64MultiArray effortCmd;
+        effortCmd.data = robot_.torqueToCurrent(g);
+        std::cout << "Current: " << std::endl;
+        for(int i = 0; i < 6; i++){
+            std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
+        }
+        std::cout << std::endl;
+        //jntTraj.points.push_back(jntTrajPt);
+        //eff_cmd_pub_.publish(effortCmd);
     }
 
 }
@@ -75,6 +80,7 @@ bool BravoGravityComp::toggleGravityComp(
                 res.success = true;
                 res.message = "Controller " + old_controller_name_ + " stopped and " +
                             effort_controller_name_ + " started";
+                running_ = true;
                 return true;
             } else{
                 res.success = false;
@@ -82,6 +88,7 @@ bool BravoGravityComp::toggleGravityComp(
                                 " or start " + effort_controller_name_;
             }
         } else if( !req.data && running_){
+            running_ = false;
             // stop controller
             controller_manager_msgs::SwitchController switchSrv;
             switchSrv.request.stop_controllers.push_back(effort_controller_name_);
@@ -111,6 +118,13 @@ bool BravoGravityComp::toggleGravityComp(
         return true;
 }
 
-
-
 }; // bravo_controllers ns
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "Bravo_Gravity_Comp_Node");
+    ros::NodeHandle nh;
+    bravo_controllers::BravoGravityComp bgc(nh);
+    ros::spin();
+    return 0;
+}

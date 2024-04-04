@@ -4,11 +4,11 @@
 #include <std_srvs/SetBool.h>
 #include <controller_manager_msgs/SwitchController.h>
 #include <controller_manager_msgs/ListControllers.h>
-#include <trajectory_msgs/JointTrajectory.h>
-#include <trajectory_msgs/JointTrajectoryPoint.h>
-
+//#include <trajectory_msgs/JointTrajectory.h>
+//#include <trajectory_msgs/JointTrajectoryPoint.h>
+#include <std_msgs/Float64MultiArray.h>
 // custom includes
-#include <bravo_controllers/robot.h>
+#include<bravo_controllers/robot.h>
 
 namespace bravo_controllers{
 
