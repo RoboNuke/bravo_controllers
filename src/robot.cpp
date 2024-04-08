@@ -74,7 +74,14 @@ std::vector<double> Robot::getGravity(){
     std::vector<double> angles(n, 0.0);
     std::vector<double> vels(n, 0.0);
     std::vector<double> accels(n, 0.0);
-    std::vector<geometry_msgs::Wrench> wrenches(8, geometry_msgs::Wrench());
+    geometry_msgs::Wrench holder;
+    holder.force.x = 0;
+    holder.force.y = 0;
+    holder.force.z = 0;
+    holder.torque.x = 0;
+    holder.torque.y = 0;
+    holder.torque.z = 0;
+    std::vector<geometry_msgs::Wrench> wrenches(8, holder);
     // copy joint angles
     state_->copyJointGroupPositions("arm", angles);
     dyn_solver_->getTorques(

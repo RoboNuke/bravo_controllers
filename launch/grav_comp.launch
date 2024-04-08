@@ -1,5 +1,4 @@
 <launch>
-    
     <node name="gravity_comp_controller"
         pkg="bravo_controllers"
         type="gravity_comp_controller"
