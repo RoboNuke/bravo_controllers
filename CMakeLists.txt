@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   moveit_core
   moveit_ros_planning_interface
+  sensor_msgs
 )
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
@@ -131,6 +132,7 @@ include_directories(
 add_library(${PROJECT_NAME}
    src/robot.cpp
    src/bravo_gravity_comp.cpp
+   src/compliance_controller.cpp
 )
 target_link_libraries(${PROJECT_NAME} 
   ${catkin_LIBRARIES}
@@ -151,8 +153,15 @@ target_link_libraries(moveit_test
   #${PROJECT_NAME}
 )
 
-add_executable(gravity_comp_controller src/bravo_gravity_comp.cpp)
+add_executable(gravity_comp_controller src/gravity_comp_node.cpp)
 target_link_libraries(gravity_comp_controller
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${PROJECT_NAME}
+)
+
+add_executable(compliance_controller src/compliance_control_node.cpp)
+target_link_libraries(compliance_controller
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
   ${PROJECT_NAME}

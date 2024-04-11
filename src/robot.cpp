@@ -8,7 +8,6 @@ Robot::~Robot(){
 }
 Robot::Robot()
 {
-    
     robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
     
     model_ = robot_model_loader.getModel();
@@ -27,6 +26,8 @@ Robot::Robot()
     arm_group_->printGroupInfo();
 
     ee_link_name_ = arm_group_->getLinkModelNames().back();
+    //std::cout << "Base:" << state_->getLinkModelNames()[0] << std::endl;
+    std::cout << "EE Link:" << ee_link_name_ << std::endl;
     grav_.x = 0.0;
     grav_.y = 0.0;
     grav_.z = -9.8;
@@ -169,5 +170,18 @@ std::vector<double> Robot::currentToTorque(std::vector<double> currents){
     torques[5] = currents[5] * 0.209 * 120.0 / 1000.0; // Kt /(1000* Gr)
     return torques;
 }
+
+Eigen::VectorXd Robot::getJntVels(){
+    std::vector<double> vels(joint_names_.size(), 0.0);
+    state_->copyJointGroupVelocities("arm", vels);
+    Vector6d jntVels(vels.data());
+    return jntVels;
+}
+
+std::vector<double> Robot::torqueToCurrent(Eigen::VectorXd torques){
+    std::vector<double> t(torques.data(), torques.data()+torques.rows()*torques.cols());
+    return torqueToCurrent(t);
+}
+
 
 }; // bravo_controllers ns

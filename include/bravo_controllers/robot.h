@@ -10,7 +10,7 @@
 #include <moveit/dynamics_solver/dynamics_solver.h>
 
 namespace bravo_controllers{
-
+typedef Eigen::Matrix<double, 6, 1> Vector6d;
 class Robot {
     public:
         Robot();
@@ -19,6 +19,7 @@ class Robot {
         Eigen::MatrixXd getJacobian(Eigen::Vector3d ref_pt, std::string link_name);
         Eigen::MatrixXd getAnalyticJacobian(Eigen::MatrixXd j);
         Eigen::MatrixXd getPsudoInv(Eigen::MatrixXd j);
+        Eigen::VectorXd getJntVels(); 
         std::vector<double> getGravity();
         std::vector<double> getTorques();
         std::vector<double> getTorques(bool with_accel);
@@ -29,6 +30,7 @@ class Robot {
                         std::vector<double> jnt_accels);
         void setState(sensor_msgs::JointState msg);
         std::vector<double> torqueToCurrent(std::vector<double> torques);
+        std::vector<double> torqueToCurrent(Eigen::VectorXd torques);
         std::vector<double> currentToTorque(std::vector<double> currents);
         std::vector<std::string> joint_names_;
 

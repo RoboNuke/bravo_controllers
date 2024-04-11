@@ -35,24 +35,40 @@ int main(int argc, char** argv)
                                           "bravo_axis_e","bravo_axis_f",
                                           "bravo_axis_g"};
     js.name = joint_names;
-    std::vector<double> pos2 {0.0010152395963668823, 0.15205837786197662, 
-                                1.3160640001296997, 
-                                3.1499903202056885, 0.6710423231124878, 
-                                2.850409984588623, 3.1400632858276367};
-    //std::reverse(pos2.begin(), pos2.end());
+    /*std::vector<double> pos2 {3.13991, 2.8505, 
+                                0.6711, 3.1499, 
+                                1.3161, 0.1521, 0.0010152395963668823};
+    std::reverse(pos2.begin(), pos2.end());*/
+    /*std::vector<double> pos2 {.001, 
+                            32.9*3.14/180.0, 
+                            85.2*3.14/180.0, 
+                            180.4*3.14/180.0,
+                            91.6*3.14/180.0,
+                            149.3*3.14/180.0,
+                            176.8*3.14/180.0};*/
+    std::vector<double> pos2 {0.001, 
+                            32.9*3.14/180,
+                            162.0*3.14/180.0,
+                            180.4*3.14/180.0,
+                            167.6*3.14/180.0,
+                            3.14,
+                            176.9*3.14/180.0};
     std::vector<double> vel2(7,0.0);
     std::vector<double> accel2(7, 0.0);
     js.position = pos2;
     js.velocity = vel2;
     js.effort = accel2;
     robot.setState(js);
-    std::vector<double> tout = robot.getTorques();
+    std::vector<double> tout = robot.getGravity();
     std::vector<double> cout = robot.torqueToCurrent(tout);
 
-    std::vector<double> cin {-97.32202911376953, 71.41635131835938, 170.3534393310547, 
-                            948.214111328125, 438.65057373046875, 35.26539611816406};
+    /*std::vector<double> cin {-170.26, 367.6, 954.27, 175.97, 38.6, 47.522};*/
+    /*std::vector<double> cin {17.9, -17.2, 12.5, -12.7, 422.3, 1037.0, -14};*/
+    std::vector<double> cin {18.9, -13.9, -191.7, -14.5, -521.9, 101.2, 0.79};
     std::reverse(cin.begin(), cin.end());
     std::vector<double> tin = robot.currentToTorque(cin);
+
+    std::cout << cin.size() << ", " << cout.size() << ", " << tin.size() << ", " << tout.size() << std::endl;
 
     for( int i = 0; i < 6; i++){
         std::cout << cin[i] << "\t" << cout[i] 
@@ -64,5 +80,21 @@ int main(int argc, char** argv)
     //std::cout << robot.getAnalyticJacobian(jacobian) << std::endl << std::endl;
     //Eigen::MatrixXd pJ = robot.getPsudoInv(jacobian);
     //std::cout << pJ * jacobian << std::endl;
-    return 1;
+
+    bravo_controllers::Vector6d tout_clone(tout.data());
+    std::vector<double> tout2 = robot.torqueToCurrent(tout_clone);
+    std::cout << "Tout2:";
+    for(int i =0; i < 6; i++){
+        std::cout << tout2[i] << ", ";
+    }
+    std::cout << std::endl;
+
+    std::vector<double> vel3{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    js.velocity = vel3;
+    robot.setState(js);
+
+    Eigen::VectorXd jntVel = robot.getJntVels();
+    std::cout << jntVel << std::endl;
+
+    return 0;
 }

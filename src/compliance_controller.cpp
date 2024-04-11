@@ -1,11 +1,13 @@
-#include <bravo_controllers/bravo_gravity_comp.h>
+#include <bravo_controllers/compliance_controller.h>
 
 namespace bravo_controllers{
 
-BravoGravityComp::BravoGravityComp(ros::NodeHandle nh):
+ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_(nh), running_(false)
 {
-    jnt_state_sub_ = nh_.subscribe("joint_states", 1, &BravoGravityComp::jntStateCallback, this);
+    jnt_state_sub_ = nh_.subscribe("joint_states", 1, &ComplianceController::jntStateCallback, this);
+    goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
+    ee_pose_sub_ = nh_.subscribe("/ee_state", 1, &ComplianceController::EEPoseCallback, this);
     eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>("arm_effort_controller", 1);
 
     // create client to controller_manager srv for swapping controller
@@ -15,40 +17,65 @@ BravoGravityComp::BravoGravityComp(ros::NodeHandle nh):
         <controller_manager_msgs::ListControllers>("controller_manager/list_controllers");
 
     // advertise service to turn on and off this controller
-    toggle_srv_ = nh_.advertiseService("toggle_gravity_comp_controller",
-                                        &BravoGravityComp::toggleGravityComp, this);
+    toggle_srv_ = nh_.advertiseService("toggle_compliance_controller",
+                                        &ComplianceController::toggleComplianceControl, this);
     
-
+    // read in controller kp and kd from parameter server
+    std::vector<double> k_holder;
+    nh_.getParam("/compliance_controller/kp", k_holder);
+    kp_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
+    nh_.getParam("/compliance_controller/kd", k_holder);
+    kd_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
 }
 
-void BravoGravityComp::jntStateCallback(sensor_msgs::JointState msg){
+void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
+    for(int i = 0; i < 6; i++){
+        goal_pose_[i] = msg.data[i];
+    }
+}
+void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
+    for(int i = 0; i < 6; i++){
+        ee_pose_[i] = msg.position[i];
+    }
+}
+std_msgs::Float64MultiArray ComplianceController::torqueToROSEffort(Vector6d t){
+    std_msgs::Float64MultiArray msg;
+    msg.data = robot_.torqueToCurrent(t);
+    return msg;
+}
+
+void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
     robot_.setState(msg);
     if( running_ ){
         // get gravity torques
-        std::vector<double> g = robot_.getGravity();
-        // publish effort commands
-        //trajectory_msgs::JointTrajectory jntTraj;
-        //jntTraj.header.stamp = ros::Time::now();
-        //jntTraj.header.frame_id = "bravo_base_link";
-        //jntTraj.joint_names = robot_.joint_names_;
-        //trajectory_msgs::JointTrajectoryPoint jntTrajPt;
-        // convert to mA and store
-        //jntTrajPt.effort = robot_.torqueToCurrent(g);
-        std_msgs::Float64MultiArray effortCmd;
-        effortCmd.data = robot_.torqueToCurrent(g);
+        Vector6d g(robot_.getGravity().data());
+        // get analytical jacobian
+        Eigen::MatrixXd J = robot_.getJacobian();
+        Eigen::MatrixXd Ja = robot_.getAnalyticJacobian(J);
+
+        // calculate error
+        pose_error_ = goal_pose_ - ee_pose_;
+
+        // calculate u
+        dq_ = robot_.getJntVels();
+
+        // publish new command
+        u_ = g + Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_);
+        
+        // convert to effortCmd
+        std_msgs::Float64MultiArray effortCmd = torqueToROSEffort(u_);
         std::cout << "Current: " << std::endl;
         for(int i = 0; i < 6; i++){
             std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
         }
         std::cout << std::endl;
-        //jntTraj.points.push_back(jntTrajPt);
-        //eff_cmd_pub_.publish(effortCmd);
+    
+        eff_cmd_pub_.publish(effortCmd);
     }
 
 }
 
-
-bool BravoGravityComp::toggleGravityComp(
+bool ComplianceController::toggleComplianceControl(
     std_srvs::SetBool::Request &req,
     std_srvs::SetBool::Response &res){
         if(req.data && !running_){
@@ -119,3 +146,4 @@ bool BravoGravityComp::toggleGravityComp(
 }
 
 }; // bravo_controllers ns
+
