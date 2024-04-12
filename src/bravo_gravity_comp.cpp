@@ -26,23 +26,30 @@ void BravoGravityComp::jntStateCallback(sensor_msgs::JointState msg){
     if( running_ ){
         // get gravity torques
         std::vector<double> g = robot_.getGravity();
-        // publish effort commands
-        //trajectory_msgs::JointTrajectory jntTraj;
-        //jntTraj.header.stamp = ros::Time::now();
-        //jntTraj.header.frame_id = "bravo_base_link";
-        //jntTraj.joint_names = robot_.joint_names_;
-        //trajectory_msgs::JointTrajectoryPoint jntTrajPt;
-        // convert to mA and store
-        //jntTrajPt.effort = robot_.torqueToCurrent(g);
         std_msgs::Float64MultiArray effortCmd;
-        effortCmd.data = robot_.torqueToCurrent(g);
+        effortCmd.data = robot_.torqueToCurrent(g);// current g-b
+        std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
+
         std::cout << "Current: " << std::endl;
+        std::vector<double> cs(6,0.0);
+        for(int i = 6; i > 0; i--){
+            cs[6-i] = msg.effort[i]; // current g-b
+        }
+        std::vector<double> ts = robot_.currentToTorque(cs); // torques g-b
+        std::reverse(ts.begin(), ts.end()); // torques b-g
+        std::reverse(g.begin(), g.end()); // torques b-g
+        std::cout << "in A" << "\tout A" << "\tin T" << "\tout T" << std::endl;
+         for(int i = 0; i < 6; i++){
+            std::cout << msg.effort[i+1] <<"    " << effortCmd.data[i]
+                      << "    " << ts[i] <<"    " << g[i] << std::endl;
+         }
+
         for(int i = 0; i < 6; i++){
             std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
         }
         std::cout << std::endl;
         //jntTraj.points.push_back(jntTrajPt);
-        //eff_cmd_pub_.publish(effortCmd);
+        eff_cmd_pub_.publish(effortCmd);
     }
 
 }
