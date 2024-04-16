@@ -28,6 +28,7 @@ void BravoGravityComp::jntStateCallback(sensor_msgs::JointState msg){
         std::vector<double> g = robot_.getGravity();
         std_msgs::Float64MultiArray effortCmd;
         effortCmd.data = robot_.torqueToCurrent(g);// current g-b
+        //effortCmd.data.push_back(0.0); // current g-b
         std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
 
         std::cout << "Current: " << std::endl;
@@ -43,12 +44,8 @@ void BravoGravityComp::jntStateCallback(sensor_msgs::JointState msg){
             std::cout << msg.effort[i+1] <<"    " << effortCmd.data[i]
                       << "    " << ts[i] <<"    " << g[i] << std::endl;
          }
-
-        for(int i = 0; i < 6; i++){
-            std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
-        }
         std::cout << std::endl;
-        //jntTraj.points.push_back(jntTrajPt);
+        
         eff_cmd_pub_.publish(effortCmd);
     }
 
