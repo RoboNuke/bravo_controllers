@@ -5,10 +5,6 @@ namespace bravo_controllers{
 ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_(nh), running_(false)
 {
-    jnt_state_sub_ = nh_.subscribe("joint_states", 1, &ComplianceController::jntStateCallback, this);
-    goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
-    ee_pose_sub_ = nh_.subscribe("/ee_state", 1, &ComplianceController::EEPoseCallback, this);
-    eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>("arm_effort_controller", 1);
 
     // create client to controller_manager srv for swapping controller
     controller_switch_client_  = nh_.serviceClient
@@ -22,10 +18,19 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     
     // read in controller kp and kd from parameter server
     std::vector<double> k_holder;
-    nh_.getParam("/compliance_controller/kp", k_holder);
+    nh_.getParam("compliance_controller/kp", k_holder);
     kp_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
-    nh_.getParam("/compliance_controller/kd", k_holder);
+    nh_.getParam("compliance_controller/kd", k_holder);
     kd_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
+
+    std::string ee_state_topic, joint_state_topic;
+    nh_.getParam("compliance_controller/joint_state_topic", joint_state_topic);
+    nh_.getParam("compliacne_Controller/ee_state_topic", ee_state_topic);
+
+    jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
+    goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
+    ee_pose_sub_ = nh_.subscribe(ee_state_topic, 1, &ComplianceController::EEPoseCallback, this);
+    eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>("arm_effort_controller", 1);
 }
 
 void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){

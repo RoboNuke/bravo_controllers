@@ -1,0 +1,22 @@
+<launch>
+    <arg name="test_compliance_control"
+        default="false"
+        doc="Are you testing the compliance controller?" 
+    />
+
+    <include file="$(find bravo_arm_sw)/launch/bravo_arm.launch">
+        <arg  name="use_ps4_controller" value="false"/>
+        <arg  name="with_trisect" value="false"/>
+        <arg  name="start_rviz" value="true"/>
+        <arg  name="with_base_hand" value="false"/>
+        <arg  name="with_rigid_peg" value="false"/>
+        <arg  name="with_moveit_servo" value="true"/>
+        <arg  name="simulated" value="false"/>
+    </include>
+
+    <group if="$(eval arg('test_compliance_control') == true)">
+        <include file="$(find bravo_controllers)/launch/compliance_controller.launch"/>
+    </group>
+
+</launch>
+
