@@ -136,8 +136,8 @@ Eigen::MatrixXd Robot::getAnalyticJacobian(Eigen::MatrixXd Jg)
          0, 0, 0, 1, 0, 0,
          0, 0, 0, 0, 1, 0,
          0, 0, 0, 0, 0, 1;
-    
     T.block<3,3>(3,3) = R.matrix().transpose().block<3,3>(0,0);
+    std::cout << "R:\n" << R.matrix() << "\nT:\n" << T << std::endl;
     Eigen::MatrixXd Ja = T * Jg;
     return Ja;
 }

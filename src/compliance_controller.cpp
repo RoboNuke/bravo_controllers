@@ -17,20 +17,39 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
                                         &ComplianceController::toggleComplianceControl, this);
     
     // read in controller kp and kd from parameter server
-    std::vector<double> k_holder;
+    std::vector<double> k_holder, kd_holder;
     nh_.getParam("compliance_controller/kp", k_holder);
-    kp_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
-    nh_.getParam("compliance_controller/kd", k_holder);
-    kd_ = Eigen::Matrix<double, 6, 6>(k_holder.data());
+    nh_.getParam("compliance_controller/kd", kd_holder);
+    kp_ = Eigen::Matrix<double, 6, 6>();
+    kd_ = Eigen::Matrix<double, 6, 6>();
+    std::cout << "Got to printout" << std::endl;
+    for(int i = 0; i < 6; i ++){
+        for(int j=0; j < 6; j++){
+            if( i == j){
+                kp_(i,j) = k_holder[i];
+                kd_(i,j) = kd_holder[i];
+            }else{
+                kp_(i,j) = 0.0;
+                kd_(i,j) = 0.0;
+            }
+        }
+    }
+    std::cout << "Kp:\n" << kp_ << "\n  kd:\n" << kd_ << std::endl;
 
-    std::string ee_state_topic, joint_state_topic;
+    std::string ee_state_topic, joint_state_topic, effort_cmd_topic;
     nh_.getParam("compliance_controller/joint_state_topic", joint_state_topic);
-    nh_.getParam("compliacne_Controller/ee_state_topic", ee_state_topic);
+    nh_.getParam("compliance_controller/ee_state_topic", ee_state_topic);
+    nh_.getParam("compliance_controller/effort_cmd_topic", effort_cmd_topic);
+
+    std::cout << "ee_state_topic:" << ee_state_topic << std::endl;
+    std::cout << "joint_state_topic:" << joint_state_topic << std::endl;
+    std::cout << "effort_cmd_topic:" << effort_cmd_topic << std::endl;
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
     goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
     ee_pose_sub_ = nh_.subscribe(ee_state_topic, 1, &ComplianceController::EEPoseCallback, this);
-    eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>("arm_effort_controller", 1);
+    eff_cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>(effort_cmd_topic, 1);
+    std::cout << "Compliance Controller Initialized" << std::endl;
 }
 
 void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
@@ -56,26 +75,31 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         Vector6d g(robot_.getGravity().data());
         // get analytical jacobian
         Eigen::MatrixXd J = robot_.getJacobian();
+        std::cout << "J:\n" << J << std::endl;
         Eigen::MatrixXd Ja = robot_.getAnalyticJacobian(J);
+        std::cout << "Ja:\n" << Ja << std::endl;
 
         // calculate error
         pose_error_ = goal_pose_ - ee_pose_;
+        //std::cout << "Pose Error:" << pose_error_.matrix() << std::cout;
 
         // calculate u
         dq_ = robot_.getJntVels();
 
         // publish new command
+        std::cout << "g:" << g << std::endl;
         u_ = g + Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_);
+        std::cout << "u:" << u_ << std::endl;
         
         // convert to effortCmd
         std_msgs::Float64MultiArray effortCmd = torqueToROSEffort(u_); // g-b
         std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
 
-        std::cout << "Current: " << std::endl;
+        /*std::cout << "Current: " << std::endl;
         for(int i = 0; i < 6; i++){
             std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
         }
-        std::cout << std::endl;
+        std::cout << std::endl;*/
     
         eff_cmd_pub_.publish(effortCmd);
     }

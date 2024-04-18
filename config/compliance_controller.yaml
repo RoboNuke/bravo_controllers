@@ -3,3 +3,4 @@ compliance_controller:
   kd: [0, 0, 0, 0, 0, 0]
   joint_state_topic: "/bravo/joint_states"
   ee_state_topic: "/bravo/ee_state"
+  effort_cmd_topic: "/bravo/arm_effort_controller/command"

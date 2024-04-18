@@ -1,6 +1,6 @@
 <launch>
     <arg name="test_compliance_control"
-        default="false"
+        default="true"
         doc="Are you testing the compliance controller?" 
     />
 
@@ -10,7 +10,7 @@
         <arg  name="start_rviz" value="true"/>
         <arg  name="with_base_hand" value="false"/>
         <arg  name="with_rigid_peg" value="false"/>
-        <arg  name="with_moveit_servo" value="true"/>
+        <arg  name="with_moveit_servo" value="false"/>
         <arg  name="simulated" value="false"/>
     </include>
 
