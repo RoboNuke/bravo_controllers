@@ -63,7 +63,9 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         u_ = g + Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_);
         
         // convert to effortCmd
-        std_msgs::Float64MultiArray effortCmd = torqueToROSEffort(u_);
+        std_msgs::Float64MultiArray effortCmd = torqueToROSEffort(u_); // g-b
+        std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
+
         std::cout << "Current: " << std::endl;
         for(int i = 0; i < 6; i++){
             std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;

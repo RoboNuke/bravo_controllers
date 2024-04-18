@@ -35,24 +35,24 @@ int main(int argc, char** argv)
                                           "bravo_axis_e","bravo_axis_f",
                                           "bravo_axis_g"};
     js.name = joint_names;
-    /*std::vector<double> pos2 {3.13991, 2.8505, 
+    std::vector<double> pos2 {3.13991, 2.8505, 
                                 0.6711, 3.1499, 
                                 1.3161, 0.1521, 0.0010152395963668823};
-    std::reverse(pos2.begin(), pos2.end());*/
+    std::reverse(pos2.begin(), pos2.end());
     /*std::vector<double> pos2 {.001, 
                             32.9*3.14/180.0, 
                             85.2*3.14/180.0, 
                             180.4*3.14/180.0,
                             91.6*3.14/180.0,
                             149.3*3.14/180.0,
-                            176.8*3.14/180.0};*/
+                            176.8*3.14/180.0};
     std::vector<double> pos2 {0.001, 
                             32.9*3.14/180,
                             162.0*3.14/180.0,
                             180.4*3.14/180.0,
                             167.6*3.14/180.0,
                             3.14,
-                            176.9*3.14/180.0};
+                            176.9*3.14/180.0};*/
     std::vector<double> vel2(7,0.0);
     std::vector<double> accel2(7, 0.0);
     js.position = pos2;
@@ -62,10 +62,10 @@ int main(int argc, char** argv)
     std::vector<double> tout = robot.getGravity();
     std::vector<double> cout = robot.torqueToCurrent(tout);
 
-    /*std::vector<double> cin {-170.26, 367.6, 954.27, 175.97, 38.6, 47.522};*/
+    std::vector<double> cin {-170.26, 367.6, 954.27, 175.97, 38.6, 47.522};
     /*std::vector<double> cin {17.9, -17.2, 12.5, -12.7, 422.3, 1037.0, -14};*/
-    std::vector<double> cin {18.9, -13.9, -191.7, -14.5, -521.9, 101.2, 0.79};
-    std::reverse(cin.begin(), cin.end());
+    /*std::vector<double> cin {18.9, -13.9, -191.7, -14.5, -521.9, 101.2, 0.79};*/
+    //std::reverse(cin.begin(), cin.end());
     std::vector<double> tin = robot.currentToTorque(cin);
 
     std::cout << cin.size() << ", " << cout.size() << ", " << tin.size() << ", " << tout.size() << std::endl;
