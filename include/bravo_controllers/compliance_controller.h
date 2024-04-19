@@ -5,6 +5,7 @@
 #include <controller_manager_msgs/SwitchController.h>
 #include <controller_manager_msgs/ListControllers.h>
 #include <std_msgs/Float64MultiArray.h>
+#include "bravo_controllers/set_gains.h"
 // custom includes
 #include<bravo_controllers/robot.h>
 
@@ -22,9 +23,11 @@ class ComplianceController{
         // services
         bool toggleComplianceControl(std_srvs::SetBool::Request &req,
                             std_srvs::SetBool::Response &res);
+        bool setGains(set_gains::Request &req,
+                            set_gains::Response &res);
 
         std_msgs::Float64MultiArray torqueToROSEffort(Vector6d t);
-
+        void SetGains(std::vector<double> k_holder, std::vector<double> kp_holder);
 
     private:
         // ros crap
@@ -36,6 +39,7 @@ class ComplianceController{
 
         // services
         ros::ServiceServer toggle_srv_;
+        ros::ServiceServer gain_srv_;
         ros::ServiceClient controller_switch_client_;
         ros::ServiceClient controller_list_client_;
 

@@ -88,11 +88,11 @@ std::vector<double> Robot::getGravity(){
     dyn_solver_->getTorques(
         angles, vels, accels, wrenches, torques
     );
-    std::cout << "Torques: [";
+    /*std::cout << "Torques: [";
     for(int i = 0; i < n; i++){
         std::cout << torques[i] << ", ";
     }
-    std::cout << "\b]" << std::endl;
+    std::cout << "\b]" << std::endl;*/
     return torques;
 }
 std::vector<double> Robot::getTorques(){
@@ -137,7 +137,7 @@ Eigen::MatrixXd Robot::getAnalyticJacobian(Eigen::MatrixXd Jg)
          0, 0, 0, 0, 1, 0,
          0, 0, 0, 0, 0, 1;
     T.block<3,3>(3,3) = R.matrix().transpose().block<3,3>(0,0);
-    std::cout << "R:\n" << R.matrix() << "\nT:\n" << T << std::endl;
+    //std::cout << "R:\n" << R.matrix() << "\nT:\n" << T << std::endl;
     Eigen::MatrixXd Ja = T * Jg;
     return Ja;
 }
