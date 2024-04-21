@@ -101,8 +101,8 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         //std::cout << "Ja:\n" << Ja << std::endl;
 
         // calculate error
-        pose_error_ = goal_pose_ - ee_pose_;
-        std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
+        pose_error_ = ee_pose_ - goal_pose_;
+        //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
 
         // calculate u
         dq_ = robot_.getJntVels();
@@ -111,7 +111,7 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         //std::cout << "g:" << g << std::endl;
         //std::cout << (Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_)).transpose() << std::endl;
         //std::cout << g.transpose() << std::endl;
-        u_ = g + Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_);
+        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
         //std::cout << "u:" << u_ << std::endl;
         
         // convert to effortCmd
