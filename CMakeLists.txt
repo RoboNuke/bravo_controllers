@@ -63,6 +63,7 @@ catkin_python_setup()
  add_service_files(
    FILES
    set_gains.srv
+   StartPlayback.srv
  )
 
 ## Generate actions in the 'action' folder
@@ -168,6 +169,7 @@ target_link_libraries(compliance_controller
 
 catkin_install_python(PROGRAMS 
   scripts/ee_state_publisher.py
+  scripts/traj_record_playback.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 ## Add cmake target dependencies of the library

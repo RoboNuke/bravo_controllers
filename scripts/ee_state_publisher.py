@@ -11,7 +11,9 @@ class EEStatePubliser:
         self.ee_link_name = rospy.get_param("ee_link", "ee_link")
         self.world_frame = rospy.get_param("world_frame", "bravo_base_link")
         self.dt = rospy.get_param("dt",0.001)
+        self.pub_quat = rospy.get_param("~pub_quat", False)
 
+        print("Publish Quaternion:", self.pub_quat)
         self.pose = []
         self.vels = []
         self.lastTime = None
@@ -60,9 +62,13 @@ class EEStatePubliser:
         q.append(transform.transform.rotation.z)
         q.append(transform.transform.rotation.w)
         r,p,y = euler_from_quaternion(q)
-        pose.append(r)
-        pose.append(p)
-        pose.append(y)
+        if self.pub_quat:
+            for i in range(4):
+                pose.append(q[i])
+        else:
+            pose.append(r)
+            pose.append(p)
+            pose.append(y)
 
         if self.tDiff == 0:
             for i in range(6):

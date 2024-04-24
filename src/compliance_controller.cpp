@@ -2,35 +2,6 @@
 
 namespace bravo_controllers{
 
-bool ComplianceController::setGains(set_gains::Request &req,
-                            set_gains::Response &res){
-          
-    if(req.new_kps.size() != 6 || req.new_kds.size() != 6){
-        res.success=false;
-        res.message = "Wrong number of gains";
-    }
-    SetGains(req.new_kps, req.new_kds);
-    res.success = true;
-    res.message = "New gains set!";
-    return true;                      
-}
-
-void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<double> kd_holder){
-    std::cout << "Got to printout" << std::endl;
-    for(int i = 0; i < 6; i ++){
-        for(int j=0; j < 6; j++){
-            if( i == j){
-                kp_(i,j) = k_holder[i];
-                kd_(i,j) = kd_holder[i];
-            }else{
-                kp_(i,j) = 0.0;
-                kd_(i,j) = 0.0;
-            }
-        }
-    }
-    std::cout << "Kp:\n" << kp_ << "\n  kd:\n" << kd_ << std::endl;
-
-}
 ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_(nh), running_(false)
 {
@@ -64,6 +35,8 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     std::cout << "joint_state_topic:" << joint_state_topic << std::endl;
     std::cout << "effort_cmd_topic:" << effort_cmd_topic << std::endl;
 
+    nh_.getParam("compliance_controller/simulate", sim_);
+    std::cout << "Sim:" << sim_ << std::endl;
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
     goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
@@ -72,15 +45,63 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     std::cout << "Compliance Controller Initialized" << std::endl;
 }
 
+bool ComplianceController::setGains(set_gains::Request &req,
+                            set_gains::Response &res){
+          
+    if(req.new_kps.size() != 6 || req.new_kds.size() != 6){
+        res.success=false;
+        res.message = "Wrong number of gains";
+    }
+    SetGains(req.new_kps, req.new_kds);
+    res.success = true;
+    res.message = "New gains set!";
+    return true;                      
+}
+
+void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<double> kd_holder){
+    std::cout << "Got to printout" << std::endl;
+    for(int i = 0; i < 6; i ++){
+        for(int j=0; j < 6; j++){
+            if( i == j){
+                kp_(i,j) = k_holder[i];
+                kd_(i,j) = kd_holder[i];
+            }else{
+                kp_(i,j) = 0.0;
+                kd_(i,j) = 0.0;
+            }
+        }
+    }
+    std::cout << "Kp:\n" << kp_ << "\n  kd:\n" << kd_ << std::endl;
+
+}
+
 void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
-    for(int i = 0; i < 6; i++){
+    for(int i = 0; i < 3; i++){
         goal_pose_[i] = msg.data[i];
     }
+    if (msg.data.size() == 6){
+        goal_orient_ = Eigen::AngleAxisd(msg.data[3], Eigen::Vector3d::UnitX()) *
+                        Eigen::AngleAxisd(msg.data[4], Eigen::Vector3d::UnitY()) *
+                        Eigen::AngleAxisd(msg.data[5], Eigen::Vector3d::UnitZ());
+    } else{
+        goal_orient_ = Eigen::Quaterniond(msg.data[6], msg.data[3], 
+                                    msg.data[4], msg.data[5]); // w, x, y, z
+    }
+
 }
 void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
-    for(int i = 0; i < 6; i++){
+    for(int i = 0; i < 3; i++){
         ee_pose_[i] = msg.position[i];
     }
+    if (msg.position.size() == 6){
+        goal_orient_ = Eigen::AngleAxisd(msg.position[3], Eigen::Vector3d::UnitX()) *
+                        Eigen::AngleAxisd(msg.position[4], Eigen::Vector3d::UnitY()) *
+                        Eigen::AngleAxisd(msg.position[5], Eigen::Vector3d::UnitZ());
+    } else{
+        ee_orient_ = Eigen::Quaterniond(msg.position[6], msg.position[3], 
+                                        msg.position[4], msg.position[5]); // w, x, y, z
+    }
+        
     //std::cout << "ee_pose:" << ee_pose_.transpose() << std::endl;
 }
 std_msgs::Float64MultiArray ComplianceController::torqueToROSEffort(Vector6d t){
@@ -92,8 +113,6 @@ std_msgs::Float64MultiArray ComplianceController::torqueToROSEffort(Vector6d t){
 void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
     robot_.setState(msg);
     if( running_ ){
-        // get gravity torques
-        Vector6d g(robot_.getGravity().data());
         // get analytical jacobian
         Eigen::MatrixXd J = robot_.getJacobian();
         //std::cout << "J:\n" << J << std::endl;
@@ -101,8 +120,19 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         //std::cout << "Ja:\n" << Ja << std::endl;
 
         // calculate error
-        pose_error_ = ee_pose_ - goal_pose_;
-        //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
+        if( goal_orient_.coeffs().dot(ee_orient_.coeffs()) < 0.0){
+            ee_orient_.coeffs() << -ee_orient_.coeffs();
+        }
+
+        //orient_error_ = ee_orient_.inverse() * goal_orient_;
+        orient_error_ = goal_orient_.inverse() * ee_orient_;
+        pose_error_.head(3) = ee_pose_.head(3) - goal_pose_.head(3); //goal_pose_ - ee_pose_;
+        pose_error_.tail(3) << orient_error_.x(), orient_error_.y(), orient_error_.z();
+
+        /* below is included in franka controllers but doesn't make sense to me
+        pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
+
+        std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
 
         // calculate u
         dq_ = robot_.getJntVels();
@@ -111,13 +141,20 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         //std::cout << "g:" << g << std::endl;
         //std::cout << (Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_)).transpose() << std::endl;
         //std::cout << g.transpose() << std::endl;
+        Vector6d g(robot_.getGravity().data());
         u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
         //std::cout << "u:" << u_ << std::endl;
         
         // convert to effortCmd
-        std_msgs::Float64MultiArray effortCmd = torqueToROSEffort(u_); // g-b
-        std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
-
+        std_msgs::Float64MultiArray effortCmd;
+        if(!sim_){
+            effortCmd = torqueToROSEffort(u_); // g-b
+            std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
+        } else{
+            for(int i = 0; i < 6; i++){
+                effortCmd.data.push_back(u_[i]);
+            }
+        }
         /*std::cout << "Current: " << std::endl;
         for(int i = 0; i < 6; i++){
             std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;

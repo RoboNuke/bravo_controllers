@@ -46,11 +46,15 @@ class ComplianceController{
         // actual useful stuff
         Robot robot_;
         bool running_;
+        bool sim_;
         Eigen::MatrixXd kp_;
         Eigen::MatrixXd kd_;
-        Vector6d goal_pose_;
-        Vector6d ee_pose_;
+        Vector3d goal_pose_;
+        Eigen::Quaterniond goal_orient_;
+        Vector3d ee_pose_;
+        Eigen::Quaterniond ee_orient_;
         Vector6d pose_error_;
+        Eigen::Quaterniond orient_error_;
         Vector6d dq_;
         Vector6d u_;
         std::string effort_controller_name_;

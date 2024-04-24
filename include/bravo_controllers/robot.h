@@ -10,7 +10,9 @@
 #include <moveit/dynamics_solver/dynamics_solver.h>
 
 namespace bravo_controllers{
+typedef Eigen::Matrix<double, 3, 1> Vector3d;
 typedef Eigen::Matrix<double, 6, 1> Vector6d;
+typedef Eigen::Matrix<double, 7, 1> Vector7d;
 class Robot {
     public:
         Robot();

@@ -1,22 +1,22 @@
 <!-- Include this launch file to have the compliance controller available to turn on and off -->
 
 <launch>
-
     <node name="ee_state_publisher" 
                 pkg="bravo_controllers" 
                 type="ee_state_publisher.py"
-                ns="bravo"
-    />
+                ns="bravo" launch-prefix="xterm -hold -e">
+                <param name="pub_quat" type="bool" value="true"/>
+    </node>
 
     <rosparam command="load" 
                 file="$(find bravo_controllers)/config/compliance_controller.yaml" 
                 ns="bravo"
     />
      
-    <node name="compliance_controller" 
+    <!--node name="compliance_controller" 
                 pkg="bravo_controllers" 
                 type="compliance_controller"
                 ns="bravo"
                 launch-prefix="xterm -hold -e"
-    /> 
+    /--> 
 </launch>
