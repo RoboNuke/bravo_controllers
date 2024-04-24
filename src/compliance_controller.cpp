@@ -94,12 +94,16 @@ void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
         ee_pose_[i] = msg.position[i];
     }
     if (msg.position.size() == 6){
-        goal_orient_ = Eigen::AngleAxisd(msg.position[3], Eigen::Vector3d::UnitX()) *
+        ee_orient_ = Eigen::AngleAxisd(msg.position[3], Eigen::Vector3d::UnitX()) *
                         Eigen::AngleAxisd(msg.position[4], Eigen::Vector3d::UnitY()) *
                         Eigen::AngleAxisd(msg.position[5], Eigen::Vector3d::UnitZ());
     } else{
         ee_orient_ = Eigen::Quaterniond(msg.position[6], msg.position[3], 
                                         msg.position[4], msg.position[5]); // w, x, y, z
+    }
+    if(!running_){
+        goal_pose_ = ee_pose_;
+        goal_orient_ = ee_orient_;
     }
         
     //std::cout << "ee_pose:" << ee_pose_.transpose() << std::endl;

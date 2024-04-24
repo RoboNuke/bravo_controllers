@@ -13,10 +13,10 @@
                 ns="bravo"
     />
      
-    <!--node name="compliance_controller" 
+    <node name="compliance_controller" 
                 pkg="bravo_controllers" 
                 type="compliance_controller"
                 ns="bravo"
                 launch-prefix="xterm -hold -e"
-    /--> 
+    /> 
 </launch>

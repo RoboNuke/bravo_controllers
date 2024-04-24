@@ -29,7 +29,7 @@ def eeStateCB(msg):
 def playbackSRV(srv):
     global goalPub
     # load traj
-    with open('/home/hunter/traj.yaml', 'r') as file:
+    with open(srv.filepath, 'r') as file:
         traj = yaml.safe_load(file)
     print(traj)
     msg = Float64MultiArray()

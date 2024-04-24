@@ -1,7 +1,7 @@
 compliance_controller:
-  simulate: true
-  kp: [6500.0, 6885.0, 9850.0, 50.0, 50.0, 50.0]
-  kd: [230.0, 645.0, 975.0, 100, 100, 100]
+  simulate: false
+  kp: [6500.0, 6885.0, 9850.0, 1400.0, 1400.0, 1400.0]
+  kd: [230.0, 645.0, 975.0, 10.0, 10.0, 10.0]
   joint_state_topic: "/bravo/joint_states"
   ee_state_topic: "/bravo/ee_state"
   effort_cmd_topic: "/bravo/arm_effort_controller/command"
