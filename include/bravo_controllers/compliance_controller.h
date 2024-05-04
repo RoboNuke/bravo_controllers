@@ -28,6 +28,8 @@ class ComplianceController{
 
         std_msgs::Float64MultiArray torqueToROSEffort(Vector6d t);
         void SetGains(std::vector<double> k_holder, std::vector<double> kp_holder);
+        Eigen::Quaterniond EulerToQuat(double x, double y, double z);
+        double clamp(double x, double min, double max);
 
     private:
         // ros crap
@@ -59,6 +61,18 @@ class ComplianceController{
         Vector6d u_;
         std::string effort_controller_name_;
         std::string old_controller_name_;
+
+        // error clipping stuff
+        bool clip_error_;
+        double trans_max_error_;
+        double rot_max_error_;
+
+        // collision ctuff
+        bool check_self_collision_;
+        double pos_mult_;
+        double rot_mult_;
+        double pos_repulse_;
+        double rot_repulse_;
 
 }; // ComplianceController class
 

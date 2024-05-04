@@ -1,7 +1,24 @@
 compliance_controller:
-  simulate: false
-  kp: [6500.0, 6885.0, 9850.0, 1400.0, 1400.0, 1400.0]
-  kd: [230.0, 645.0, 975.0, 10.0, 10.0, 10.0]
+  simulate: true
+  #kp: [6500.0, 6885.0, 9850.0, 1400.0, 1400.0, 1400.0]
+  kp: [6500.0, 6500.0, 6500.0, 1000.0, 1000.0, 1000.0]
+  #kd: [230.0, 645.0, 975.0, 10.0, 10.0, 10.0]
+  kd: [230.0, 645.0, 975.0, 100.0, 100.0, 100.0]
   joint_state_topic: "/bravo/joint_states"
   ee_state_topic: "/bravo/ee_state"
   effort_cmd_topic: "/bravo/arm_effort_controller/command"
+
+  # things for the error clipping
+  clip_error: true
+  trans_max_error: 0.001 # m (1mm)
+  rot_max_error: 0.1 # rad (~6 deg)
+
+  # things for collision
+  use_self_collision_avoidance: true
+  # how much to multiply pose error by
+  pos_mult: 10.0
+  rot_mult: 2.0
+
+  # how much to push the robot away when collision is about to happen
+  pos_repulse: 1.5
+  rot_repulse: 1.0 # 1.0 = no repulsion

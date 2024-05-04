@@ -32,6 +32,49 @@ Robot::Robot()
     grav_.y = 0.0;
     grav_.z = -9.8;
     dyn_solver_ = new dynamics_solver::DynamicsSolver(model_, "arm", grav_);
+
+    planning_scene_ = new planning_scene::PlanningScene(model_);
+
+    // for collision checking
+    /*collision_request_ = new collision_detection::CollisionRequest();
+    collision_result_ = new collision_detection::CollisionResponse();*/
+}
+
+std::vector<Eigen::Vector3d> Robot::getCollisionDir(std::vector<double> jnt_angles){
+    std::vector<Eigen::Vector3d> dirs;
+    // set state to new joint angle pose
+    robot_state::RobotState& current_state = planning_scene_->getCurrentStateNonConst();
+    current_state.setJointGroupPositions(arm_group_, jnt_angles);
+
+    // reset collision request
+    collision_result_.clear();
+    // set request to get contacts
+    collision_request_.contacts = true;
+    collision_request_.max_contacts = 1000;
+    collision_request_.group_name="arm";
+
+    planning_scene_->checkSelfCollision(collision_request_, collision_result_);
+
+    std::cout << "We are " 
+            << (collision_result_.collision ? "in ": "not in ") 
+            << "collision" << std::endl;
+
+    if( collision_result_.collision ){
+        collision_detection::CollisionResult::ContactMap::const_iterator it;
+        for( it = collision_result_.contacts.begin(); 
+             it != collision_result_.contacts.end();
+             ++it)
+        {
+            std::cout << "Contact between: "<<
+                        it->first.first.c_str() << " and " << 
+                        it->first.second.c_str() << "  ";
+            for(int i = 0; i < it->second.size(); i++){
+                dirs.push_back(it->second[i].normal);
+                std::cout << it->second[i].normal.transpose() << std::endl;
+            }
+        }
+    }
+    return dirs;
 }
 
 Eigen::MatrixXd Robot::getJacobian(){
@@ -171,6 +214,12 @@ std::vector<double> Robot::currentToTorque(std::vector<double> currents){
     return torques;
 }
 
+Vector6d Robot::getJntAngles(){
+    std::vector<double> angles(joint_names_.size(), 0.0);
+    state_->copyJointGroupPositions("arm", angles);
+    Vector6d jntAngles(angles.data());
+    return jntAngles;
+}
 Eigen::VectorXd Robot::getJntVels(){
     std::vector<double> vels(joint_names_.size(), 0.0);
     state_->copyJointGroupVelocities("arm", vels);

@@ -4,7 +4,7 @@
         doc="Are you testing the compliance controller?" 
     />
     <arg name="simulate"
-        default="false"
+        default="true"
         doc="Are you testing the compliance controller?" 
     />
 

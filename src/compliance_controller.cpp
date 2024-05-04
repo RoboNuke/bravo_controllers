@@ -18,6 +18,19 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     gain_srv_ = nh_.advertiseService("compliance_control/set_gains",
                                         &ComplianceController::setGains, this);
     
+    // read in error clipping stuff
+    nh_.getParam("compliance_controller/clip_error", clip_error_);
+    nh_.getParam("compliance_controller/trans_max_error", trans_max_error_);
+    nh_.getParam("compliance_controller/rot_max_error", rot_max_error_);
+
+    // read in self collision stuff
+    nh_.getParam("compliance_controller/use_self_collision_avoidance", check_self_collision_);
+    nh_.getParam("compliance_controller/pos_mult", pos_mult_);
+    nh_.getParam("compliance_controller/rot_mult", rot_mult_);
+    nh_.getParam("compliance_controller/pos_repulse", pos_repulse_);
+    nh_.getParam("compliance_controller/rot_repulse", rot_repulse_);
+
+
     // read in controller kp and kd from parameter server
     std::vector<double> k_holder, kd_holder;
     nh_.getParam("compliance_controller/kp", k_holder);
@@ -36,7 +49,8 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     std::cout << "effort_cmd_topic:" << effort_cmd_topic << std::endl;
 
     nh_.getParam("compliance_controller/simulate", sim_);
-    std::cout << "Sim:" << sim_ << std::endl;
+    std::cout << "Sim:  " << (sim_ ? "on":"off") << std::endl;
+    std::cout << "Clip_error  " << (clip_error_ ? "on":"off") << std::endl;
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
     goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
@@ -80,23 +94,29 @@ void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
         goal_pose_[i] = msg.data[i];
     }
     if (msg.data.size() == 6){
-        goal_orient_ = Eigen::AngleAxisd(msg.data[3], Eigen::Vector3d::UnitX()) *
-                        Eigen::AngleAxisd(msg.data[4], Eigen::Vector3d::UnitY()) *
-                        Eigen::AngleAxisd(msg.data[5], Eigen::Vector3d::UnitZ());
+        goal_orient_ = EulerToQuat(msg.data[3], msg.data[4], msg.data[5]);
     } else{
         goal_orient_ = Eigen::Quaterniond(msg.data[6], msg.data[3], 
                                     msg.data[4], msg.data[5]); // w, x, y, z
     }
 
 }
+
+double ComplianceController::clamp(double x, double minx, double maxx){
+    return std::max( std::min(x, maxx), minx);
+}
+Eigen::Quaterniond ComplianceController::EulerToQuat(double x, double y, double z){
+    return Eigen::AngleAxisd(x, Eigen::Vector3d::UnitX()) *
+            Eigen::AngleAxisd(y, Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(z, Eigen::Vector3d::UnitZ());
+}
+
 void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
     for(int i = 0; i < 3; i++){
         ee_pose_[i] = msg.position[i];
     }
     if (msg.position.size() == 6){
-        ee_orient_ = Eigen::AngleAxisd(msg.position[3], Eigen::Vector3d::UnitX()) *
-                        Eigen::AngleAxisd(msg.position[4], Eigen::Vector3d::UnitY()) *
-                        Eigen::AngleAxisd(msg.position[5], Eigen::Vector3d::UnitZ());
+        ee_orient_ = EulerToQuat(msg.position[3], msg.position[4], msg.position[5]);
     } else{
         ee_orient_ = Eigen::Quaterniond(msg.position[6], msg.position[3], 
                                         msg.position[4], msg.position[5]); // w, x, y, z
@@ -132,19 +152,55 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         orient_error_ = goal_orient_.inverse() * ee_orient_;
         pose_error_.head(3) = ee_pose_.head(3) - goal_pose_.head(3); //goal_pose_ - ee_pose_;
         pose_error_.tail(3) << orient_error_.x(), orient_error_.y(), orient_error_.z();
-
+        if(clip_error_){
+            for(int i = 0; i < 3; i++){
+                pose_error_[i] = clamp(pose_error_[i], -trans_max_error_, trans_max_error_);
+                pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
+            }
+        }
         /* below is included in franka controllers but doesn't make sense to me
         pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 
-        std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
-
+        // check for collision
+        //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
+        if( check_self_collision_){
+            // estimate next joint state
+            Vector6d e = pose_error_;
+            e.head(3) = e.head(3) * pos_mult_;
+            e.tail(3) = e.tail(3) * rot_mult_;
+            //std::cout << "E:" << e.transpose() << std::endl;
+            Vector6d new_angles  = robot_.getJntAngles() -  Ja.transpose() * ( e );
+            std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
+                                                    new_angles.rows() * new_angles.cols());
+            std::vector<Eigen::Vector3d> collision_dirs = robot_.getCollisionDir(newJntAngles);
+            
+            //std::cout << "Dir Size: " << collision_dirs.size() << std::endl;
+            Eigen::Vector3d x = pose_error_.head(3);
+            Eigen::Vector3d r = pose_error_.tail(3);
+            for(int i=0; i < collision_dirs.size(); i++){
+                //std::cout << collision_dirs[i].transpose() << std::endl;
+                x = x - pos_repulse_ * x.dot(collision_dirs[i]) * collision_dirs[i];
+                r = r - rot_repulse_ * r.dot(collision_dirs[i]) * collision_dirs[i];
+            }
+            pose_error_.head(3) = x;
+            pose_error_.tail(3) = r;
+            //std::cout << "After:" << pose_error_.transpose() << std::endl;
+            //for(int i=0; i < collision_dirs.size(); i++){
+            //    std::cout << x.dot(collision_dirs[i]) << ", " <<
+            //                 r.dot(collision_dirs[i]) << std::endl;
+            //}
+            /*if(collision_dirs.size() > 0){
+                std_srvs::SetBool::Request req;
+                std_srvs::SetBool::Response res;
+                req.data = false;
+                toggleComplianceControl(req, res);
+                std::cout << "Shutdown" << std::endl;
+            }*/
+        }
         // calculate u
         dq_ = robot_.getJntVels();
 
         // publish new command
-        //std::cout << "g:" << g << std::endl;
-        //std::cout << (Ja.transpose() * (kp_ * pose_error_ - kd_ * Ja * dq_)).transpose() << std::endl;
-        //std::cout << g.transpose() << std::endl;
         Vector6d g(robot_.getGravity().data());
         u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
         //std::cout << "u:" << u_ << std::endl;
@@ -159,12 +215,6 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
                 effortCmd.data.push_back(u_[i]);
             }
         }
-        /*std::cout << "Current: " << std::endl;
-        for(int i = 0; i < 6; i++){
-            std::cout << "\t" << effortCmd.data[i] << ", " << msg.effort[i+1] << std::endl;
-        }
-        std::cout << std::endl;*/
-    
         eff_cmd_pub_.publish(effortCmd);
     }
 
