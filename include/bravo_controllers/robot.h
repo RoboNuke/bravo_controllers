@@ -38,6 +38,7 @@ class Robot {
         std::vector<double> currentToTorque(std::vector<double> currents);
         std::vector<std::string> joint_names_;
 
+        std::vector<Eigen::Vector3d> getCollisionDir();
         std::vector<Eigen::Vector3d> getCollisionDir(std::vector<double> jnt_angles);
 
     private:

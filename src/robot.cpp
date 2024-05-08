@@ -36,8 +36,10 @@ Robot::Robot()
     planning_scene_ = new planning_scene::PlanningScene(model_);
 
     // for collision checking
-    /*collision_request_ = new collision_detection::CollisionRequest();
-    collision_result_ = new collision_detection::CollisionResponse();*/
+    std::map<std::string, double> paddings =  planning_scene_->getCollisionEnv()->getLinkPadding();
+    for(int i=0; i < joint_names_.size();i++){
+        std::cout << "Padding for " << joint_names_[i] << " is: " << paddings[joint_names_[i]] << std::endl;
+    }
 }
 
 std::vector<Eigen::Vector3d> Robot::getCollisionDir(std::vector<double> jnt_angles){
@@ -76,7 +78,39 @@ std::vector<Eigen::Vector3d> Robot::getCollisionDir(std::vector<double> jnt_angl
     }
     return dirs;
 }
+std::vector<Eigen::Vector3d> Robot::getCollisionDir(){
+    std::vector<Eigen::Vector3d> dirs;
 
+    // reset collision request
+    collision_result_.clear();
+    // set request to get contacts
+    collision_request_.contacts = true;
+    collision_request_.max_contacts = 1000;
+    collision_request_.group_name="arm";
+
+    planning_scene_->checkSelfCollision(collision_request_, collision_result_);
+
+    std::cout << "We are " 
+            << (collision_result_.collision ? "in ": "not in ") 
+            << "collision" << std::endl;
+
+    if( collision_result_.collision ){
+        collision_detection::CollisionResult::ContactMap::const_iterator it;
+        for( it = collision_result_.contacts.begin(); 
+             it != collision_result_.contacts.end();
+             ++it)
+        {
+            std::cout << "Contact between: "<<
+                        it->first.first.c_str() << " and " << 
+                        it->first.second.c_str() << "  ";
+            for(int i = 0; i < it->second.size(); i++){
+                dirs.push_back(it->second[i].normal);
+                std::cout << it->second[i].normal.transpose() << std::endl;
+            }
+        }
+    }
+    return dirs;
+}
 Eigen::MatrixXd Robot::getJacobian(){
     Eigen::Vector3d ref_pt(0,0,0);
     return getJacobian(ref_pt, ee_link_name_);

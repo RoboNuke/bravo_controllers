@@ -165,16 +165,16 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
         if( check_self_collision_){
             // estimate next joint state
-            Vector6d e = pose_error_;
-            e.head(3) = e.head(3) * pos_mult_;
-            e.tail(3) = e.tail(3) * rot_mult_;
+            //Vector6d e = pose_error_;
+            //e.head(3) = e.head(3) * pos_mult_;
+            //e.tail(3) = e.tail(3) * rot_mult_;
             //std::cout << "E:" << e.transpose() << std::endl;
-            Vector6d new_angles  = robot_.getJntAngles() -  Ja.transpose() * ( e );
+            Vector6d new_angles  = robot_.getJntAngles();// -  Ja.transpose() * ( e );
             std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
                                                     new_angles.rows() * new_angles.cols());
             std::vector<Eigen::Vector3d> collision_dirs = robot_.getCollisionDir(newJntAngles);
+            //std::vector<Eigen::Vector3d> collision_dirs = robot_.getCollisionDir();
             
-            //std::cout << "Dir Size: " << collision_dirs.size() << std::endl;
             Eigen::Vector3d x = pose_error_.head(3);
             Eigen::Vector3d r = pose_error_.tail(3);
             for(int i=0; i < collision_dirs.size(); i++){
