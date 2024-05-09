@@ -163,12 +163,14 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
 
         // check for collision
         //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
+        Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
         if( check_self_collision_){
             // estimate next joint state
             //Vector6d e = pose_error_;
             //e.head(3) = e.head(3) * pos_mult_;
             //e.tail(3) = e.tail(3) * rot_mult_;
             //std::cout << "E:" << e.transpose() << std::endl;
+            /*
             Vector6d new_angles  = robot_.getJntAngles();// -  Ja.transpose() * ( e );
             std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
                                                     new_angles.rows() * new_angles.cols());
@@ -183,12 +185,47 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
                 r = r - rot_repulse_ * r.dot(collision_dirs[i]) * collision_dirs[i];
             }
             pose_error_.head(3) = x;
-            pose_error_.tail(3) = r;
-            //std::cout << "After:" << pose_error_.transpose() << std::endl;
-            //for(int i=0; i < collision_dirs.size(); i++){
-            //    std::cout << x.dot(collision_dirs[i]) << ", " <<
-            //                 r.dot(collision_dirs[i]) << std::endl;
-            //}
+            pose_error_.tail(3) = r;*/
+            Vector6d new_angles  = robot_.getJntAngles();
+            std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
+                                                    new_angles.rows() * new_angles.cols());
+            collision_detection::CollisionResult collision_result = robot_.getCollisionRes(newJntAngles);
+            //std::cout << "We are " 
+            //        << (collision_result.collision ? "in ": "not in ") 
+             //       << "collision" << std::endl;
+
+
+            if( collision_result.collision ){
+                collision_detection::CollisionResult::ContactMap::const_iterator it;
+                for( it = collision_result.contacts.begin(); 
+                    it != collision_result.contacts.end();
+                    ++it)
+                {
+                    std::cout << "Contact between: "<<
+                                it->first.first.c_str() << " and " << 
+                                it->first.second.c_str() << "  ";
+                    for(int i = 0; i < it->second.size(); i++){
+                        //std::cout << it->second[i].normal.transpose() << std::endl;
+                        Eigen::MatrixXd Jcc = robot_.getJacobian(it->second[i].pos, 
+                                                                it->second[i].body_name_1);
+                        std::cout << "Jcc:\n" << Jcc << std::endl;
+                        Eigen::MatrixXd Jcc_inv = robot_.getPsudoInv(Jcc);
+                        std::cout << "Jcc_inv:\n" << Jcc_inv << std::endl;
+                        Vector6d xdot_cc;
+                        xdot_cc.head(3) = it->second[i].normal;
+                        Vector6d qd_cc = Jcc_inv * xdot_cc;
+                        for(int i =0; i < 6; i++){
+                            if(std::isnan(qd_cc[i])){
+                                qd_cc[i] = 0;
+                            }
+                        }
+                        qdot_cc += qd_cc;
+
+                    }
+                }
+                std::cout << "qdot_cc:" << qdot_cc.transpose() << std::endl;
+            }
+
             /*if(collision_dirs.size() > 0){
                 std_srvs::SetBool::Request req;
                 std_srvs::SetBool::Response res;
@@ -202,7 +239,10 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
 
         // publish new command
         Vector6d g(robot_.getGravity().data());
-        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
+        //robot_.setJntVels(-0.0000001 * qdot_cc + dq_);
+        //Vector6d g(robot_.getTorques().data());
+
+        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_)) - 0.1 * qdot_cc;
         //std::cout << "u:" << u_ << std::endl;
         
         // convert to effortCmd

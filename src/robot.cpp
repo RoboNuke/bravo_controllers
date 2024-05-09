@@ -78,8 +78,15 @@ std::vector<Eigen::Vector3d> Robot::getCollisionDir(std::vector<double> jnt_angl
     }
     return dirs;
 }
-std::vector<Eigen::Vector3d> Robot::getCollisionDir(){
-    std::vector<Eigen::Vector3d> dirs;
+Eigen::MatrixXd Robot::getJacobian(){
+    Eigen::Vector3d ref_pt(0,0,0);
+    return getJacobian(ref_pt, ee_link_name_);
+}
+
+collision_detection::CollisionResult Robot::getCollisionRes(std::vector<double> jnt_angles){
+    // set state to new joint angle pose
+    robot_state::RobotState& current_state = planning_scene_->getCurrentStateNonConst();
+    current_state.setJointGroupPositions(arm_group_, jnt_angles);
 
     // reset collision request
     collision_result_.clear();
@@ -90,30 +97,7 @@ std::vector<Eigen::Vector3d> Robot::getCollisionDir(){
 
     planning_scene_->checkSelfCollision(collision_request_, collision_result_);
 
-    std::cout << "We are " 
-            << (collision_result_.collision ? "in ": "not in ") 
-            << "collision" << std::endl;
-
-    if( collision_result_.collision ){
-        collision_detection::CollisionResult::ContactMap::const_iterator it;
-        for( it = collision_result_.contacts.begin(); 
-             it != collision_result_.contacts.end();
-             ++it)
-        {
-            std::cout << "Contact between: "<<
-                        it->first.first.c_str() << " and " << 
-                        it->first.second.c_str() << "  ";
-            for(int i = 0; i < it->second.size(); i++){
-                dirs.push_back(it->second[i].normal);
-                std::cout << it->second[i].normal.transpose() << std::endl;
-            }
-        }
-    }
-    return dirs;
-}
-Eigen::MatrixXd Robot::getJacobian(){
-    Eigen::Vector3d ref_pt(0,0,0);
-    return getJacobian(ref_pt, ee_link_name_);
+    return collision_result_;
 }
 
 Eigen::MatrixXd Robot::getJacobian(Eigen::Vector3d ref_pt, std::string link_name){
@@ -125,6 +109,11 @@ Eigen::MatrixXd Robot::getJacobian(Eigen::Vector3d ref_pt, std::string link_name
             jacobian
         );
     return jacobian;
+}
+void Robot::setJntVels(Vector6d jnt_vels){
+    std::vector<double> vels(jnt_vels.data(), jnt_vels.data() + 
+                            jnt_vels.rows() * jnt_vels.cols());
+    state_->setJointGroupVelocities(arm_group_, jnt_vels);
 }
 void Robot::setState(std::vector<double> jnt_angles, 
                 std::vector<double> jnt_vels)

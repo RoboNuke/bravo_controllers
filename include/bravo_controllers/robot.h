@@ -27,6 +27,7 @@ class Robot {
         std::vector<double> getGravity();
         std::vector<double> getTorques();
         std::vector<double> getTorques(bool with_accel);
+        void setJntVels(Vector6d jnt_vels);
         void setState(std::vector<double> jnt_angles, 
                         std::vector<double> jnt_vels); 
         void setState(std::vector<double> jnt_angles, 
@@ -38,8 +39,8 @@ class Robot {
         std::vector<double> currentToTorque(std::vector<double> currents);
         std::vector<std::string> joint_names_;
 
-        std::vector<Eigen::Vector3d> getCollisionDir();
         std::vector<Eigen::Vector3d> getCollisionDir(std::vector<double> jnt_angles);
+        collision_detection::CollisionResult getCollisionRes(std::vector<double> jnt_angles);
 
     private:
         moveit::core::RobotModelPtr model_;
