@@ -13,14 +13,13 @@ compliance_controller:
 
   # things for the error clipping
   clip_error: true
-  trans_max_error: 0.001 # m (1mm)
+  trans_max_error: 0.01 # m (1cm)
   rot_max_error: 0.1 # rad (~6 deg)
 
   # things for collision
   use_self_collision_avoidance: true
-  # how much to multiply pose error by
-  pos_mult: 5.0
-  rot_mult: 2.0
+  stop_on_collision: true # will not work if use_self_collision set to false
+  look_ahead_dt: 0.15
 
   # how much to push the robot away when collision is about to happen
   pos_repulse: 2.0

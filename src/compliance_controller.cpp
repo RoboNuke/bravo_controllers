@@ -25,10 +25,11 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
 
     // read in self collision stuff
     nh_.getParam("compliance_controller/use_self_collision_avoidance", check_self_collision_);
-    nh_.getParam("compliance_controller/pos_mult", pos_mult_);
-    nh_.getParam("compliance_controller/rot_mult", rot_mult_);
+    nh_.getParam("compliance_controller/stop_on_collision", stop_on_collision_);
+    nh_.getParam("compliance_controller/look_ahead_dt", look_ahead_dt_);
     nh_.getParam("compliance_controller/pos_repulse", pos_repulse_);
     nh_.getParam("compliance_controller/rot_repulse", rot_repulse_);
+    stop_till_new_goal_ = true;
 
 
     // read in controller kp and kd from parameter server
@@ -51,6 +52,10 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_.getParam("compliance_controller/simulate", sim_);
     std::cout << "Sim:  " << (sim_ ? "on":"off") << std::endl;
     std::cout << "Clip_error  " << (clip_error_ ? "on":"off") << std::endl;
+    std::cout << "Use self-collision checking  " << (check_self_collision_ ? "on":"off") << std::endl;
+    if(check_self_collision_){
+        std::cout << "Stop on collision  " << (stop_on_collision_ ? "on":"off") << std::endl;
+    }
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
     goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
@@ -99,6 +104,7 @@ void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
         goal_orient_ = Eigen::Quaterniond(msg.data[6], msg.data[3], 
                                     msg.data[4], msg.data[5]); // w, x, y, z
     }
+    stop_till_new_goal_ = false;
 
 }
 
@@ -121,9 +127,10 @@ void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
         ee_orient_ = Eigen::Quaterniond(msg.position[6], msg.position[3], 
                                         msg.position[4], msg.position[5]); // w, x, y, z
     }
-    if(!running_){
+    if(!running_ || stop_till_new_goal_){
         goal_pose_ = ee_pose_;
         goal_orient_ = ee_orient_;
+        //std::cout << "Set holding goal: " << goal_pose_.transpose() << std::endl;
     }
         
     //std::cout << "ee_pose:" << ee_pose_.transpose() << std::endl;
@@ -162,40 +169,18 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 
         // check for collision
-        //std::cout << "Pose Error:" << pose_error_.transpose() << std::endl;
         Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
         if( check_self_collision_){
-            // estimate next joint state
-            //Vector6d e = pose_error_;
-            //e.head(3) = e.head(3) * pos_mult_;
-            //e.tail(3) = e.tail(3) * rot_mult_;
-            //std::cout << "E:" << e.transpose() << std::endl;
-            /*
-            Vector6d new_angles  = robot_.getJntAngles();// -  Ja.transpose() * ( e );
-            std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
-                                                    new_angles.rows() * new_angles.cols());
-            std::vector<Eigen::Vector3d> collision_dirs = robot_.getCollisionDir(newJntAngles);
-            //std::vector<Eigen::Vector3d> collision_dirs = robot_.getCollisionDir();
-            
-            Eigen::Vector3d x = pose_error_.head(3);
-            Eigen::Vector3d r = pose_error_.tail(3);
-            for(int i=0; i < collision_dirs.size(); i++){
-                //std::cout << collision_dirs[i].transpose() << std::endl;
-                x = x - pos_repulse_ * x.dot(collision_dirs[i]) * collision_dirs[i];
-                r = r - rot_repulse_ * r.dot(collision_dirs[i]) * collision_dirs[i];
-            }
-            pose_error_.head(3) = x;
-            pose_error_.tail(3) = r;*/
-            Vector6d new_angles  = robot_.getJntAngles();
+            Vector6d new_angles  = robot_.getJntAngles() - Ja.transpose() * (pose_error_ * look_ahead_dt_);
             std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
                                                     new_angles.rows() * new_angles.cols());
             collision_detection::CollisionResult collision_result = robot_.getCollisionRes(newJntAngles);
+
             //std::cout << "We are " 
             //        << (collision_result.collision ? "in ": "not in ") 
              //       << "collision" << std::endl;
 
-
-            if( collision_result.collision ){
+            if( collision_result.collision && !stop_on_collision_){
                 collision_detection::CollisionResult::ContactMap::const_iterator it;
                 for( it = collision_result.contacts.begin(); 
                     it != collision_result.contacts.end();
@@ -225,24 +210,18 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
                 }
                 std::cout << "qdot_cc:" << qdot_cc.transpose() << std::endl;
             }
-
-            /*if(collision_dirs.size() > 0){
-                std_srvs::SetBool::Request req;
-                std_srvs::SetBool::Response res;
-                req.data = false;
-                toggleComplianceControl(req, res);
-                std::cout << "Shutdown" << std::endl;
-            }*/
+            if(collision_result.collision && stop_on_collision_){
+                stop_till_new_goal_ = true;
+                pose_error_ *= 0.0;
+            }
         }
-        // calculate u
-        dq_ = robot_.getJntVels();
 
         // publish new command
         Vector6d g(robot_.getGravity().data());
-        //robot_.setJntVels(-0.0000001 * qdot_cc + dq_);
-        //Vector6d g(robot_.getTorques().data());
-
-        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_)) - 0.1 * qdot_cc;
+        
+        // calculate u
+        dq_ = robot_.getJntVels();
+        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
         //std::cout << "u:" << u_ << std::endl;
         
         // convert to effortCmd
@@ -264,6 +243,7 @@ bool ComplianceController::toggleComplianceControl(
     std_srvs::SetBool::Request &req,
     std_srvs::SetBool::Response &res){
         if(req.data && !running_){
+            running_ = true;
             // get list of all loaded controllers
             controller_manager_msgs::ListControllers listSrv;
             if(controller_list_client_.call(listSrv)){
@@ -276,9 +256,11 @@ bool ComplianceController::toggleComplianceControl(
                         }
                     }
                 }
+                stop_till_new_goal_ = false;
             } else{
                 res.success = false;
                 res.message = "Controller List not available";
+                running_ = false;
                 return false;
             }
 
@@ -292,12 +274,12 @@ bool ComplianceController::toggleComplianceControl(
                 res.success = true;
                 res.message = "Controller " + old_controller_name_ + " stopped and " +
                             effort_controller_name_ + " started";
-                running_ = true;
                 return true;
             } else{
                 res.success = false;
                 res.message = "Failed to stop " + old_controller_name_ + 
                                 " or start " + effort_controller_name_;
+                running_= false;
             }
         } else if( !req.data && running_){
             running_ = false;

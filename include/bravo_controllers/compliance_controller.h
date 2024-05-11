@@ -69,8 +69,9 @@ class ComplianceController{
 
         // collision ctuff
         bool check_self_collision_;
-        double pos_mult_;
-        double rot_mult_;
+        bool stop_on_collision_;
+        bool stop_till_new_goal_;
+        double look_ahead_dt_;
         double pos_repulse_;
         double rot_repulse_;
 
