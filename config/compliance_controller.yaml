@@ -25,3 +25,6 @@ compliance_controller:
   # how much to push the robot away when collision is about to happen
   pos_repulse: 2.0
   rot_repulse: 0.0 # 1.0 = no repulsion
+
+  # use ft_interrupt
+  with_ft_sensor_interrupt: true

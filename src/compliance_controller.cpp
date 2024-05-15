@@ -31,7 +31,6 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_.getParam("compliance_controller/rot_repulse", rot_repulse_);
     stop_till_new_goal_ = true;
 
-
     // read in controller kp and kd from parameter server
     std::vector<double> k_holder, kd_holder;
     nh_.getParam("compliance_controller/kp", k_holder);
@@ -59,6 +58,16 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     std::cout << "Use self-collision checking  " << (check_self_collision_ ? "on":"off") << std::endl;
     if(check_self_collision_){
         std::cout << "Stop on collision  " << (stop_on_collision_ ? "on":"off") << std::endl;
+    }
+
+    // ft interrupt stuff
+    nh_.getParam("compliance_controller/with_ft_sensor_interrupt", with_ft_interrupt_);
+    std::cout << "FT Interrupt:  " << (with_ft_interrupt_ ? "on":"off") << std::endl;
+    if( with_ft_interrupt_ ){
+        std::string ft_interrupt_topic; 
+        nh_.getParam("ft_safety_interrupt/interrupt_topic", ft_interrupt_topic);
+        std::cout << "Interrupt topic:" << ft_interrupt_topic << std::endl;
+        ft_interrupt_sub_ = nh_.subscribe(ft_interrupt_topic, 1, &ComplianceController::ftInterruptCB, this);
     }
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
@@ -147,100 +156,140 @@ std_msgs::Float64MultiArray ComplianceController::torqueToROSEffort(Vector6d t){
     return msg;
 }
 
-void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
-    robot_->setState(msg);
-    if( running_ ){
-        // get analytical jacobian
-        Eigen::MatrixXd J = robot_->getJacobian();
-        //std::cout << "J:\n" << J << std::endl;
-        Eigen::MatrixXd Ja = robot_->getAnalyticJacobian(J);
-        //std::cout << "Ja:\n" << Ja << std::endl;
+void ComplianceController::calcPoseError(){
+    if( goal_orient_.coeffs().dot(ee_orient_.coeffs()) < 0.0){
+        ee_orient_.coeffs() << -ee_orient_.coeffs();
+    }
 
-        // calculate error
-        if( goal_orient_.coeffs().dot(ee_orient_.coeffs()) < 0.0){
-            ee_orient_.coeffs() << -ee_orient_.coeffs();
-        }
-
-        //orient_error_ = ee_orient_.inverse() * goal_orient_;
+    //orient_error_ = ee_orient_.inverse() * goal_orient_;
+    if(is_safe_){
         orient_error_ = goal_orient_.inverse() * ee_orient_;
         pose_error_.head(3) = ee_pose_.head(3) - goal_pose_.head(3); //goal_pose_ - ee_pose_;
-        pose_error_.tail(3) << orient_error_.x(), orient_error_.y(), orient_error_.z();
-        if(clip_error_){
-            for(int i = 0; i < 3; i++){
-                pose_error_[i] = clamp(pose_error_[i], -trans_max_error_, trans_max_error_);
-                pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
-            }
+    } else{
+        orient_error_ = safe_orient_.inverse() * ee_orient_;
+        pose_error_.head(3) = ee_pose_.head(3) - safe_pose_.head(3);
+    }
+    pose_error_.tail(3) << orient_error_.x(), orient_error_.y(), orient_error_.z();
+    if(clip_error_){
+        for(int i = 0; i < 3; i++){
+            pose_error_[i] = clamp(pose_error_[i], -trans_max_error_, trans_max_error_);
+            pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
         }
-        /* below is included in franka controllers but doesn't make sense to me
-        pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
+    }
+    /* below is included in franka controllers but doesn't make sense to me
+    pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
+}
 
-        dq_ = robot_->getJntVels();
+void ComplianceController::checkSelfCollision(Eigen::MatrixXd Ja){
+    Vector6d new_angles  = robot_->getJntAngles() - Ja.transpose() * (pose_error_ + kp2d_ * Ja * dq_) * look_ahead_dt_;
+    std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
+                                            new_angles.rows() * new_angles.cols());
+    collision_detection::CollisionResult collision_result = robot_->getCollisionRes(newJntAngles);
 
-        // check for collision
-        Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
-        if( check_self_collision_){
-            Vector6d new_angles  = robot_->getJntAngles() - Ja.transpose() * (pose_error_ + kp2d_ * Ja * dq_) * look_ahead_dt_;
-            std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
-                                                    new_angles.rows() * new_angles.cols());
-            collision_detection::CollisionResult collision_result = robot_->getCollisionRes(newJntAngles);
+    //std::cout << "We are " 
+    //        << (collision_result.collision ? "in ": "not in ") 
+        //       << "collision" << std::endl;
 
-            //std::cout << "We are " 
-            //        << (collision_result.collision ? "in ": "not in ") 
-             //       << "collision" << std::endl;
-
-            if( collision_result.collision && !stop_on_collision_){
-                collision_detection::CollisionResult::ContactMap::const_iterator it;
-                for( it = collision_result.contacts.begin(); 
-                    it != collision_result.contacts.end();
-                    ++it)
-                {
-                    std::cout << "Contact between: "<<
-                                it->first.first.c_str() << " and " << 
-                                it->first.second.c_str() << "  ";
-                    for(int i = 0; i < it->second.size(); i++){
-                        //std::cout << it->second[i].normal.transpose() << std::endl;
-                        Eigen::MatrixXd Jcc = robot_->getJacobian(it->second[i].pos, 
-                                                                it->second[i].body_name_1);
-                        std::cout << "Jcc:\n" << Jcc << std::endl;
-                        Eigen::MatrixXd Jcc_inv = robot_->getPsudoInv(Jcc);
-                        std::cout << "Jcc_inv:\n" << Jcc_inv << std::endl;
-                        Vector6d xdot_cc;
-                        xdot_cc.head(3) = it->second[i].normal;
-                        Vector6d qd_cc = Jcc_inv * xdot_cc;
-                        for(int i =0; i < 6; i++){
-                            if(std::isnan(qd_cc[i])){
-                                qd_cc[i] = 0;
-                            }
-                        }
-                        qdot_cc += qd_cc;
-
+    Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
+    if( collision_result.collision && !stop_on_collision_){
+        collision_detection::CollisionResult::ContactMap::const_iterator it;
+        for( it = collision_result.contacts.begin(); 
+            it != collision_result.contacts.end();
+            ++it)
+        {
+            std::cout << "Contact between: "<<
+                        it->first.first.c_str() << " and " << 
+                        it->first.second.c_str() << "  ";
+            for(int i = 0; i < it->second.size(); i++){
+                //std::cout << it->second[i].normal.transpose() << std::endl;
+                Eigen::MatrixXd Jcc = robot_->getJacobian(it->second[i].pos, 
+                                                        it->second[i].body_name_1);
+                std::cout << "Jcc:\n" << Jcc << std::endl;
+                Eigen::MatrixXd Jcc_inv = robot_->getPsudoInv(Jcc);
+                std::cout << "Jcc_inv:\n" << Jcc_inv << std::endl;
+                Vector6d xdot_cc;
+                xdot_cc.head(3) = it->second[i].normal;
+                Vector6d qd_cc = Jcc_inv * xdot_cc;
+                for(int i =0; i < 6; i++){
+                    if(std::isnan(qd_cc[i])){
+                        qd_cc[i] = 0;
                     }
                 }
-                std::cout << "qdot_cc:" << qdot_cc.transpose() << std::endl;
+                qdot_cc += qd_cc;
+
             }
-            if(collision_result.collision && stop_on_collision_){
-                stop_till_new_goal_ = true;
-                pose_error_ *= 0.0;
-            }
+        }
+        std::cout << "qdot_cc:" << qdot_cc.transpose() << std::endl;
+    }
+    if(collision_result.collision && stop_on_collision_){
+        stop_till_new_goal_ = true;
+        pose_error_ *= 0.0;
+    }
+}
+
+std_msgs::Float64MultiArray ComplianceController::toEffortCmd(Vector6d u){
+    std_msgs::Float64MultiArray effortCmd;
+    if(!sim_){
+        effortCmd = torqueToROSEffort(u); // g-b
+        std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
+    } else{
+        for(int i = 0; i < 6; i++){
+            effortCmd.data.push_back(u[i]);
+        }
+    }
+    return effortCmd;
+}
+Vector6d ComplianceController::getVecFromTwist(geometry_msgs::Twist twst){
+    Vector6d out;
+    out << twst.linear.x, twst.linear.y, twst.linear.z, twst.angular.x, twst.angular.y, twst.angular.z;
+    return out;
+}
+void ComplianceController::ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg){
+    std::cout << "FT Msg:" << msg.is_safe << std::endl;
+    is_safe_ = msg.is_safe;
+    if(!msg.is_safe){
+        std::cout << "Not safe!" << std::endl;
+        // set this makes it so goal is set to ee pose until new goal comes in
+        // this makes it so that as soon as we get into a "safe" position we 
+        // don't just instantly move back to the dangerous pose
+        stop_till_new_goal_ = true; 
+        Vector6d twst = getVecFromTwist(msg.recovery_direction);
+        Eigen::Quaterniond w = Eigen::Quaterniond(0.0, twst[3], twst[4], twst[5]); // angular velocity quaternion 
+        safe_pose_ = ee_pose_ + look_ahead_dt_ *  twst.head(3);
+        // q = q0 + t/2 * w * q0 is how to apply angular velocity to quaternions super intuitive right?
+        safe_orient_.coeffs() = ee_orient_.coeffs() + (look_ahead_dt_ / 2.0) * (w * ee_orient_).coeffs();
+        std::cout << "ee_pose_:" << ee_pose_.transpose() << std::endl;
+        std::cout << "safe_pose_:" << safe_pose_.transpose() << std::endl;
+        std::cout << "ee_orient_:" << ee_orient_.coeffs() << std::endl;
+        std::cout << "safe_orient_:" << safe_orient_.coeffs() << std::endl;
+    } 
+}
+
+void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
+    // update state
+    robot_->setState(msg);
+    if( running_ ){
+        // get useful values
+        Eigen::MatrixXd J = robot_->getJacobian();
+        Eigen::MatrixXd Ja = robot_->getAnalyticJacobian(J);
+        dq_ = robot_->getJntVels();
+
+        // calculate error
+        calcPoseError();
+
+        // check for collision
+        if( check_self_collision_){
+            checkSelfCollision(Ja);
         }
 
-        // publish new command
+        // get non-linearities
         Vector6d g(robot_->getGravity().data());
         
+        // get control
         u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
-        //std::cout << "u:" << u_ << std::endl;
         
-        // convert to effortCmd
-        std_msgs::Float64MultiArray effortCmd;
-        if(!sim_){
-            effortCmd = torqueToROSEffort(u_); // g-b
-            std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
-        } else{
-            for(int i = 0; i < 6; i++){
-                effortCmd.data.push_back(u_[i]);
-            }
-        }
-        eff_cmd_pub_.publish(effortCmd);
+        // convert to effortCmd and publish
+        eff_cmd_pub_.publish(toEffortCmd(u_));
     }
 
 }

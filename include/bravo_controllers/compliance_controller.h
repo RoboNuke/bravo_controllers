@@ -5,7 +5,9 @@
 #include <controller_manager_msgs/SwitchController.h>
 #include <controller_manager_msgs/ListControllers.h>
 #include <std_msgs/Float64MultiArray.h>
+#include <geometry_msgs/Twist.h>
 #include "bravo_controllers/set_gains.h"
+#include <bravo_ft_sensor/FT_Interrupt.h>
 // custom includes
 #include<bravo_controllers/robot.h>
 
@@ -31,6 +33,13 @@ class ComplianceController{
         Eigen::Quaterniond EulerToQuat(double x, double y, double z);
         double clamp(double x, double min, double max);
 
+        // utilities
+        void checkSelfCollision(Eigen::MatrixXd Ja);
+        void calcPoseError();
+        std_msgs::Float64MultiArray toEffortCmd(Vector6d u);
+        void ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg);
+        Vector6d getVecFromTwist(geometry_msgs::Twist twst);
+
     private:
         // ros crap
         ros::NodeHandle nh_;
@@ -38,6 +47,7 @@ class ComplianceController{
         ros::Subscriber jnt_state_sub_;
         ros::Subscriber goal_pose_sub_;
         ros::Subscriber ee_pose_sub_;
+        ros::Subscriber ft_interrupt_sub_;
 
         // services
         ros::ServiceServer toggle_srv_;
@@ -75,6 +85,13 @@ class ComplianceController{
         double look_ahead_dt_;
         double pos_repulse_;
         double rot_repulse_;
+
+        // ft interrupt stuff
+        bool with_ft_interrupt_;
+        bool is_safe_;
+        Vector3d safe_pose_;
+        Eigen::Quaterniond safe_orient_;
+
 
 }; // ComplianceController class
 

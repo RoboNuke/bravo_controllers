@@ -1,12 +1,20 @@
 <!-- Include this launch file to have the compliance controller available to turn on and off -->
 
 <launch>
+    <arg name="with_force_torque_sensor"
+        default="true"
+        doc="Whether to include a FT sensor link."
+    />
     <node name="ee_state_publisher" 
                 pkg="bravo_controllers" 
                 type="ee_state_publisher.py"
                 ns="bravo" launch-prefix="xterm -hold -e">
                 <param name="pub_quat" type="bool" value="true"/>
     </node>
+    
+    <group if="$(eval arg('with_force_torque_sensor') == true)">
+        <include file="$(find bravo_ft_sensor)/launch/ft_interrupt.launch"/>
+    </group>
 
     <rosparam command="load" 
                 file="$(find bravo_controllers)/config/compliance_controller.yaml" 

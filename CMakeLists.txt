@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_core
   moveit_ros_planning_interface
   sensor_msgs
+  bravo_ft_sensor
 )
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
