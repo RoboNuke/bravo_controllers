@@ -6,7 +6,10 @@ Robot::~Robot(){
     delete arm_group_;
     
 }
-Robot::Robot()
+Robot::Robot(){
+    Robot("");
+}
+Robot::Robot(std::string ee_frame)
 {
     robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
     
@@ -24,8 +27,12 @@ Robot::Robot()
         std::cout << "\t" << joint_names_[i] << std::endl;
     }
     arm_group_->printGroupInfo();
-
-    ee_link_name_ = arm_group_->getLinkModelNames().back();
+    num_seg_ = arm_group_->getLinkModelNames().size();
+    if( ee_frame == "" ){
+        ee_link_name_ = arm_group_->getLinkModelNames().back();
+    } else{
+        ee_link_name_ = ee_frame;
+    }
     //std::cout << "Base:" << state_->getLinkModelNames()[0] << std::endl;
     std::cout << "EE Link:" << ee_link_name_ << std::endl;
     grav_.x = 0.0;
@@ -40,6 +47,9 @@ Robot::Robot()
     for(int i=0; i < joint_names_.size();i++){
         std::cout << "Padding for " << joint_names_[i] << " is: " << paddings[joint_names_[i]] << std::endl;
     }
+
+    std::cout << "Number of fixed joint:" << arm_group_->getFixedJointModels().size() << std::endl;
+    std::cout << "Number of link models:" << arm_group_->getLinkModelNames().size() << std::endl;
 }
 
 std::vector<Eigen::Vector3d> Robot::getCollisionDir(std::vector<double> jnt_angles){
@@ -148,7 +158,7 @@ std::vector<double> Robot::getGravity(){
     holder.torque.x = 0;
     holder.torque.y = 0;
     holder.torque.z = 0;
-    std::vector<geometry_msgs::Wrench> wrenches(8, holder);
+    std::vector<geometry_msgs::Wrench> wrenches(num_seg_, holder);
     // copy joint angles
     state_->copyJointGroupPositions("arm", angles);
     dyn_solver_->getTorques(

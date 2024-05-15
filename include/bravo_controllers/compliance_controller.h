@@ -46,7 +46,7 @@ class ComplianceController{
         ros::ServiceClient controller_list_client_;
 
         // actual useful stuff
-        Robot robot_;
+        Robot* robot_;
         bool running_;
         bool sim_;
         Eigen::MatrixXd kp_;
@@ -71,6 +71,7 @@ class ComplianceController{
         bool check_self_collision_;
         bool stop_on_collision_;
         bool stop_till_new_goal_;
+        Eigen::MatrixXd kp2d_; // weights on the Ja * dq term in look ahead est
         double look_ahead_dt_;
         double pos_repulse_;
         double rot_repulse_;

@@ -8,7 +8,7 @@ class EEStatePubliser:
     def __init__(self):
         self.statePub = rospy.Publisher('/bravo/ee_state', JointState, queue_size=10)
 
-        self.ee_link_name = rospy.get_param("ee_link", "ee_link")
+        self.ee_link_name = rospy.get_param("compliance_controller/ee_frame", "ee_link")
         self.world_frame = rospy.get_param("world_frame", "bravo_base_link")
         self.dt = rospy.get_param("dt",0.001)
         self.pub_quat = rospy.get_param("~pub_quat", False)

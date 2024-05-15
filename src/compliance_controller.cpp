@@ -38,12 +38,16 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_.getParam("compliance_controller/kd", kd_holder);
     kp_ = Eigen::Matrix<double, 6, 6>();
     kd_ = Eigen::Matrix<double, 6, 6>();
+    kp2d_ = Eigen::Matrix<double, 6, 6>();
     SetGains(k_holder, kd_holder);
 
-    std::string ee_state_topic, joint_state_topic, effort_cmd_topic;
+    std::string ee_state_topic, joint_state_topic, effort_cmd_topic, ee_frame;
     nh_.getParam("compliance_controller/joint_state_topic", joint_state_topic);
     nh_.getParam("compliance_controller/ee_state_topic", ee_state_topic);
     nh_.getParam("compliance_controller/effort_cmd_topic", effort_cmd_topic);
+    nh_.getParam("compliance_controller/ee_frame", ee_frame);
+
+    robot_ = new Robot(ee_frame);
 
     std::cout << "ee_state_topic:" << ee_state_topic << std::endl;
     std::cout << "joint_state_topic:" << joint_state_topic << std::endl;
@@ -84,9 +88,11 @@ void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<do
             if( i == j){
                 kp_(i,j) = k_holder[i];
                 kd_(i,j) = kd_holder[i];
+                kp2d_(i,j) = kd_(i,j) / kp_(i,j);
             }else{
                 kp_(i,j) = 0.0;
                 kd_(i,j) = 0.0;
+                kp2d_(i,j) = 0.0;
             }
         }
     }
@@ -137,17 +143,17 @@ void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
 }
 std_msgs::Float64MultiArray ComplianceController::torqueToROSEffort(Vector6d t){
     std_msgs::Float64MultiArray msg;
-    msg.data = robot_.torqueToCurrent(t);
+    msg.data = robot_->torqueToCurrent(t);
     return msg;
 }
 
 void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
-    robot_.setState(msg);
+    robot_->setState(msg);
     if( running_ ){
         // get analytical jacobian
-        Eigen::MatrixXd J = robot_.getJacobian();
+        Eigen::MatrixXd J = robot_->getJacobian();
         //std::cout << "J:\n" << J << std::endl;
-        Eigen::MatrixXd Ja = robot_.getAnalyticJacobian(J);
+        Eigen::MatrixXd Ja = robot_->getAnalyticJacobian(J);
         //std::cout << "Ja:\n" << Ja << std::endl;
 
         // calculate error
@@ -168,13 +174,15 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         /* below is included in franka controllers but doesn't make sense to me
         pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 
+        dq_ = robot_->getJntVels();
+
         // check for collision
         Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
         if( check_self_collision_){
-            Vector6d new_angles  = robot_.getJntAngles() - Ja.transpose() * (pose_error_ * look_ahead_dt_);
+            Vector6d new_angles  = robot_->getJntAngles() - Ja.transpose() * (pose_error_ + kp2d_ * Ja * dq_) * look_ahead_dt_;
             std::vector<double> newJntAngles(new_angles.data(), new_angles.data() + 
                                                     new_angles.rows() * new_angles.cols());
-            collision_detection::CollisionResult collision_result = robot_.getCollisionRes(newJntAngles);
+            collision_detection::CollisionResult collision_result = robot_->getCollisionRes(newJntAngles);
 
             //std::cout << "We are " 
             //        << (collision_result.collision ? "in ": "not in ") 
@@ -191,10 +199,10 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
                                 it->first.second.c_str() << "  ";
                     for(int i = 0; i < it->second.size(); i++){
                         //std::cout << it->second[i].normal.transpose() << std::endl;
-                        Eigen::MatrixXd Jcc = robot_.getJacobian(it->second[i].pos, 
+                        Eigen::MatrixXd Jcc = robot_->getJacobian(it->second[i].pos, 
                                                                 it->second[i].body_name_1);
                         std::cout << "Jcc:\n" << Jcc << std::endl;
-                        Eigen::MatrixXd Jcc_inv = robot_.getPsudoInv(Jcc);
+                        Eigen::MatrixXd Jcc_inv = robot_->getPsudoInv(Jcc);
                         std::cout << "Jcc_inv:\n" << Jcc_inv << std::endl;
                         Vector6d xdot_cc;
                         xdot_cc.head(3) = it->second[i].normal;
@@ -217,10 +225,8 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         }
 
         // publish new command
-        Vector6d g(robot_.getGravity().data());
+        Vector6d g(robot_->getGravity().data());
         
-        // calculate u
-        dq_ = robot_.getJntVels();
         u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
         //std::cout << "u:" << u_ << std::endl;
         

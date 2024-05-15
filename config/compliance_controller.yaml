@@ -10,6 +10,7 @@ compliance_controller:
   effort_cmd_topic: "/bravo/arm_effort_controller/command"
   toggle_cc_service_topic: "/bravo/toggle_compliance_controller"
   cc_cmd_topic: "/bravo/compliance_controller/command"
+  ee_frame: "ee_link"
 
   # things for the error clipping
   clip_error: true
@@ -19,7 +20,7 @@ compliance_controller:
   # things for collision
   use_self_collision_avoidance: true
   stop_on_collision: true # will not work if use_self_collision set to false
-  look_ahead_dt: 0.15
+  look_ahead_dt: 0.1
 
   # how much to push the robot away when collision is about to happen
   pos_repulse: 2.0

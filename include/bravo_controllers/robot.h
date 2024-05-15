@@ -17,6 +17,7 @@ typedef Eigen::Matrix<double, 7, 1> Vector7d;
 class Robot {
     public:
         Robot();
+        Robot(std::string ee_frame);
         ~Robot();
         Eigen::MatrixXd getJacobian();
         Eigen::MatrixXd getJacobian(Eigen::Vector3d ref_pt, std::string link_name);
@@ -47,6 +48,7 @@ class Robot {
         moveit::core::RobotState* state_;
         moveit::core::JointModelGroup* arm_group_;
         std::string ee_link_name_;
+        int num_seg_;
 
         dynamics_solver::DynamicsSolver* dyn_solver_;
         geometry_msgs::Vector3 grav_;
