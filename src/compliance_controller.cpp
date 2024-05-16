@@ -162,7 +162,8 @@ void ComplianceController::calcPoseError(){
     if( goal_orient_.coeffs().dot(ee_orient_.coeffs()) < 0.0){
         ee_orient_.coeffs() << -ee_orient_.coeffs();
     }
-
+    //std::cout << "Goal:" << goal_pose_.head(3).transpose() << "  " << goal_orient_.coeffs().transpose() << std::endl;
+    //std::cout << "Goal:" << ee_pose_.head(3).transpose() << "  " << ee_orient_.coeffs().transpose() << std::endl;
     //orient_error_ = ee_orient_.inverse() * goal_orient_;
     if(is_safe_){
         orient_error_ = goal_orient_.inverse() * ee_orient_;
@@ -340,6 +341,8 @@ bool ComplianceController::toggleComplianceControl(
                                 " or start " + effort_controller_name_;
                 running_= false;
             }
+            /*std::cout << "New Goal:" << goal_pose_.transpose() << std::endl;
+            std::cout << "Orient:" << goal_orient_.coeffs() << std::endl;*/
         } else if( !req.data && running_){
             running_ = false;
             // stop controller
