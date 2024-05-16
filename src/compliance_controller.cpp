@@ -62,6 +62,7 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
 
     // ft interrupt stuff
     nh_.getParam("compliance_controller/with_ft_sensor_interrupt", with_ft_interrupt_);
+    is_safe_ = true;
     std::cout << "FT Interrupt:  " << (with_ft_interrupt_ ? "on":"off") << std::endl;
     if( with_ft_interrupt_ ){
         std::string ft_interrupt_topic; 
@@ -120,6 +121,7 @@ void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
                                     msg.data[4], msg.data[5]); // w, x, y, z
     }
     stop_till_new_goal_ = false;
+    std::cout << "New Goal:" << goal_pose_.transpose() << std::endl;
 
 }
 
@@ -176,6 +178,7 @@ void ComplianceController::calcPoseError(){
             pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
         }
     }
+    std::cout << pose_error_.transpose() << std::endl;
     /* below is included in franka controllers but doesn't make sense to me
     pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 }
@@ -230,6 +233,7 @@ void ComplianceController::checkSelfCollision(Eigen::MatrixXd Ja){
 std_msgs::Float64MultiArray ComplianceController::toEffortCmd(Vector6d u){
     std_msgs::Float64MultiArray effortCmd;
     if(!sim_){
+        //std::cout << u << std::endl;
         effortCmd = torqueToROSEffort(u); // g-b
         std::reverse(effortCmd.data.begin(), effortCmd.data.end()); // current b-g
     } else{
@@ -287,7 +291,7 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
         
         // get control
         u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
-        
+        //std::cout << "u:" << u_.transpose() << std::endl;
         // convert to effortCmd and publish
         eff_cmd_pub_.publish(toEffortCmd(u_));
     }
