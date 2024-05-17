@@ -163,7 +163,7 @@ void ComplianceController::calcPoseError(){
         ee_orient_.coeffs() << -ee_orient_.coeffs();
     }
     //std::cout << "Goal:" << goal_pose_.head(3).transpose() << "  " << goal_orient_.coeffs().transpose() << std::endl;
-    //std::cout << "Goal:" << ee_pose_.head(3).transpose() << "  " << ee_orient_.coeffs().transpose() << std::endl;
+    //std::cout << "Pose:" << ee_pose_.head(3).transpose() << "  " << ee_orient_.coeffs().transpose() << std::endl;
     //orient_error_ = ee_orient_.inverse() * goal_orient_;
     if(is_safe_){
         orient_error_ = goal_orient_.inverse() * ee_orient_;
@@ -179,7 +179,7 @@ void ComplianceController::calcPoseError(){
             pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
         }
     }
-    std::cout << pose_error_.transpose() << std::endl;
+    //std::cout << pose_error_.transpose() << std::endl;
     /* below is included in franka controllers but doesn't make sense to me
     pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 }
@@ -250,8 +250,7 @@ Vector6d ComplianceController::getVecFromTwist(geometry_msgs::Twist twst){
     return out;
 }
 void ComplianceController::ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg){
-    std::cout << "FT Msg:" << msg.is_safe << std::endl;
-    is_safe_ = msg.is_safe;
+    //std::cout << "FT Msg:" << msg.is_safe << std::endl;
     if(!msg.is_safe){
         std::cout << "Not safe!" << std::endl;
         // set this makes it so goal is set to ee pose until new goal comes in
@@ -262,12 +261,13 @@ void ComplianceController::ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg){
         Eigen::Quaterniond w = Eigen::Quaterniond(0.0, twst[3], twst[4], twst[5]); // angular velocity quaternion 
         safe_pose_ = ee_pose_ + look_ahead_dt_ *  twst.head(3);
         // q = q0 + t/2 * w * q0 is how to apply angular velocity to quaternions super intuitive right?
-        safe_orient_.coeffs() = ee_orient_.coeffs() + (look_ahead_dt_ / 2.0) * (w * ee_orient_).coeffs();
+        safe_orient_.coeffs() = ee_orient_.coeffs();// + (look_ahead_dt_ / 2.0) * (w * ee_orient_).coeffs();
         std::cout << "ee_pose_:" << ee_pose_.transpose() << std::endl;
         std::cout << "safe_pose_:" << safe_pose_.transpose() << std::endl;
-        std::cout << "ee_orient_:" << ee_orient_.coeffs() << std::endl;
-        std::cout << "safe_orient_:" << safe_orient_.coeffs() << std::endl;
+        //std::cout << "ee_orient_:" << ee_orient_.coeffs() << std::endl;
+        //std::cout << "safe_orient_:" << safe_orient_.coeffs() << std::endl;
     } 
+    is_safe_ = msg.is_safe;
 }
 
 void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){

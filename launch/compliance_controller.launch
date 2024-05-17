@@ -13,6 +13,9 @@
     </node>
     
     <group if="$(eval arg('with_force_torque_sensor') == true)">
+        <include file="$(find bravo_ft_sensor)/launch/ft_grav_comp.launch">
+            <arg name="calibrate" value="false"/>
+        </include>
         <include file="$(find bravo_ft_sensor)/launch/ft_interrupt.launch"/>
     </group>
 
