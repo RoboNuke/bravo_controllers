@@ -27,6 +27,8 @@ class ComplianceController{
                             std_srvs::SetBool::Response &res);
         bool setGains(set_gains::Request &req,
                             set_gains::Response &res);
+        bool demoComplianceControl(std_srvs::SetBool::Request &req,
+                                    std_srvs::SetBool::Response &res);
 
         std_msgs::Float64MultiArray torqueToROSEffort(Vector6d t);
         void SetGains(std::vector<double> k_holder, std::vector<double> kp_holder);
@@ -52,6 +54,7 @@ class ComplianceController{
         // services
         ros::ServiceServer toggle_srv_;
         ros::ServiceServer gain_srv_;
+        ros::ServiceServer demo_srv_;
         ros::ServiceClient controller_switch_client_;
         ros::ServiceClient controller_list_client_;
 
@@ -59,6 +62,7 @@ class ComplianceController{
         Robot* robot_;
         bool running_;
         bool sim_;
+        bool in_demo_mode_;
         Eigen::MatrixXd kp_;
         Eigen::MatrixXd kd_;
         Vector3d goal_pose_;

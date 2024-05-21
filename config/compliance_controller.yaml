@@ -8,7 +8,7 @@ compliance_controller:
   joint_state_topic: "/bravo/joint_states"
   ee_state_topic: "/bravo/ee_state"
   effort_cmd_topic: "/bravo/arm_effort_controller/command"
-  toggle_cc_service_topic: "/bravo/toggle_compliance_controller"
+  toggle_cc_service_topic: "/bravo/compliance_controller/enable_compliance_controller"
   cc_cmd_topic: "/bravo/compliance_controller/command"
   ee_frame: "bravo_peg_link"
 
