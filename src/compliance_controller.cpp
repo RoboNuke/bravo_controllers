@@ -13,11 +13,14 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
         <controller_manager_msgs::ListControllers>("controller_manager/list_controllers");
 
     // advertise service to turn on and off this controller
-    toggle_srv_ = nh_.advertiseService("toggle_compliance_controller",
+    toggle_srv_ = nh_.advertiseService("compliance_controller/enable_compliance_controller",
                                         &ComplianceController::toggleComplianceControl, this);
     gain_srv_ = nh_.advertiseService("compliance_control/set_gains",
                                         &ComplianceController::setGains, this);
-    
+    demo_srv_ = nh_.advertiseService("compliance_controller/enable_demo_mode",
+                                        &ComplianceController::demoComplianceControl, this);
+    in_demo_mode_ = false;
+
     // read in error clipping stuff
     nh_.getParam("compliance_controller/clip_error", clip_error_);
     nh_.getParam("compliance_controller/trans_max_error", trans_max_error_);
@@ -111,6 +114,9 @@ void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<do
 }
 
 void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
+    if(in_demo_mode_){
+        return;
+    }
     for(int i = 0; i < 3; i++){
         goal_pose_[i] = msg.data[i];
     }
@@ -144,7 +150,7 @@ void ComplianceController::EEPoseCallback(sensor_msgs::JointState msg){
         ee_orient_ = Eigen::Quaterniond(msg.position[6], msg.position[3], 
                                         msg.position[4], msg.position[5]); // w, x, y, z
     }
-    if(!running_ || stop_till_new_goal_){
+    if(!running_ || stop_till_new_goal_ || in_demo_mode_){
         goal_pose_ = ee_pose_;
         goal_orient_ = ee_orient_;
         //std::cout << "Set holding goal: " << goal_pose_.transpose() << std::endl;
@@ -298,7 +304,30 @@ void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
     }
 
 }
-
+bool ComplianceController::demoComplianceControl(
+    std_srvs::SetBool::Request &req,
+    std_srvs::SetBool::Response &res
+)
+{
+    if(!in_demo_mode_ && req.data){
+        // turn on demo mode
+        res.message = "Successfully enabled demo mode...";
+        in_demo_mode_ = true;
+    } else if( in_demo_mode_ && !req.data){
+        // turn off demo mode
+        res.message = "Successfully disabled demo mode...";
+        in_demo_mode_ = false;
+    }else{
+        res.success = false;
+        if(req.data){
+            res.message = "Demo Mode already running...";
+        } else{
+            res.message = "Demo Mode already stoppped...";
+        }
+        return false;
+    }
+    return true;
+}
 bool ComplianceController::toggleComplianceControl(
     std_srvs::SetBool::Request &req,
     std_srvs::SetBool::Response &res){
