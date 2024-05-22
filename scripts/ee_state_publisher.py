@@ -14,6 +14,7 @@ class EEStatePubliser:
         self.pub_quat = rospy.get_param("~pub_quat", False)
 
         print("Publish Quaternion:", self.pub_quat)
+        print("EE Frame:", self.ee_link_name)
         self.pose = []
         self.vels = []
         self.lastTime = None

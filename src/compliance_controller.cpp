@@ -262,8 +262,8 @@ void ComplianceController::ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg){
         safe_pose_ = ee_pose_ + look_ahead_dt_ *  twst.head(3);
         // q = q0 + t/2 * w * q0 is how to apply angular velocity to quaternions super intuitive right?
         safe_orient_.coeffs() = ee_orient_.coeffs();// + (look_ahead_dt_ / 2.0) * (w * ee_orient_).coeffs();
-        std::cout << "ee_pose_:" << ee_pose_.transpose() << std::endl;
-        std::cout << "safe_pose_:" << safe_pose_.transpose() << std::endl;
+        //std::cout << "ee_pose_:" << ee_pose_.transpose() << std::endl;
+        //std::cout << "safe_pose_:" << safe_pose_.transpose() << std::endl;
         //std::cout << "ee_orient_:" << ee_orient_.coeffs() << std::endl;
         //std::cout << "safe_orient_:" << safe_orient_.coeffs() << std::endl;
     } 

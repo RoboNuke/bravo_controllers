@@ -5,6 +5,12 @@
         default="true"
         doc="Whether to include a FT sensor link."
     />
+
+    <rosparam command="load" 
+                file="$(find bravo_controllers)/config/compliance_controller.yaml" 
+                ns="bravo"
+    />
+    
     <node name="ee_state_publisher" 
                 pkg="bravo_controllers" 
                 type="ee_state_publisher.py"
@@ -18,11 +24,6 @@
         </include>
         <include file="$(find bravo_ft_sensor)/launch/ft_interrupt.launch"/>
     </group>
-
-    <rosparam command="load" 
-                file="$(find bravo_controllers)/config/compliance_controller.yaml" 
-                ns="bravo"
-    />
      
     <node name="compliance_controller" 
                 pkg="bravo_controllers" 

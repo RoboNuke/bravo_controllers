@@ -1,0 +1,15 @@
+
+<launch>
+    <rosparam command="load" 
+                file="$(find bravo_controllers)/config/compliance_controller.yaml" 
+                ns="bravo"
+    />
+    
+    <node name="ee_state_publisher" 
+                pkg="bravo_controllers" 
+                type="ee_state_publisher.py"
+                ns="bravo" launch-prefix="xterm -hold -e">
+                <param name="pub_quat" type="bool" value="true"/>
+    </node>
+
+</launch>
