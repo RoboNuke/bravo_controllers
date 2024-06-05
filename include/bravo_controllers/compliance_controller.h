@@ -32,6 +32,10 @@ class ComplianceController{
 
         std_msgs::Float64MultiArray torqueToROSEffort(Vector6d t);
         void SetGains(std::vector<double> k_holder, std::vector<double> kp_holder);
+        void SetGains(std::vector<double> k_holder, 
+                        std::vector<double> kd_holder,
+                        std::vector<double> ki_holder);
+
         Eigen::Quaterniond EulerToQuat(double x, double y, double z);
         double clamp(double x, double min, double max);
 
@@ -41,6 +45,7 @@ class ComplianceController{
         std_msgs::Float64MultiArray toEffortCmd(Vector6d u);
         void ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg);
         Vector6d getVecFromTwist(geometry_msgs::Twist twst);
+        void saturateJntTorques();
 
     private:
         // ros crap
@@ -63,6 +68,7 @@ class ComplianceController{
         bool running_;
         bool sim_;
         bool in_demo_mode_;
+        bool comp_friction_;
         Eigen::MatrixXd kp_;
         Eigen::MatrixXd kd_;
         Vector3d goal_pose_;
@@ -71,10 +77,15 @@ class ComplianceController{
         Eigen::Quaterniond ee_orient_;
         Vector6d pose_error_;
         Eigen::Quaterniond orient_error_;
+        Vector6d q_;
         Vector6d dq_;
         Vector6d u_;
         std::string effort_controller_name_;
         std::string old_controller_name_;
+
+        // joint torque saturation
+        Vector6d old_u_;
+        double du_max_;
 
         // error clipping stuff
         bool clip_error_;
@@ -95,6 +106,19 @@ class ComplianceController{
         bool is_safe_;
         Vector3d safe_pose_;
         Eigen::Quaterniond safe_orient_;
+
+        // integral stuff
+        Vector6d error_i_;
+        Eigen::MatrixXd ki_;
+        float max_i_trans_;
+        float max_i_rot_;
+        bool use_i_;
+        bool clip_i_;
+
+        // null space 
+        bool use_null_space_;
+        Vector6d null_jnts_;
+        double null_space_stiffness_;
 
 
 }; // ComplianceController class

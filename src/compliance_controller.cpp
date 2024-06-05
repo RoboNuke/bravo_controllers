@@ -15,11 +15,22 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     // advertise service to turn on and off this controller
     toggle_srv_ = nh_.advertiseService("compliance_controller/enable_compliance_controller",
                                         &ComplianceController::toggleComplianceControl, this);
-    gain_srv_ = nh_.advertiseService("compliance_control/set_gains",
+    gain_srv_ = nh_.advertiseService("compliance_controller/set_gains",
                                         &ComplianceController::setGains, this);
-    demo_srv_ = nh_.advertiseService("compliance_controller/enable_demo_mode",
+    demo_srv_ = nh_.advertiseService("compliance_controller/demo_mode_enable",
                                         &ComplianceController::demoComplianceControl, this);
     in_demo_mode_ = false;
+
+    std::string ee_state_topic, joint_state_topic, effort_cmd_topic, ee_frame;
+    nh_.getParam("compliance_controller/joint_state_topic", joint_state_topic);
+    nh_.getParam("compliance_controller/ee_state_topic", ee_state_topic);
+    nh_.getParam("compliance_controller/effort_cmd_topic", effort_cmd_topic);
+    nh_.getParam("compliance_controller/ee_frame", ee_frame);
+
+    nh_.getParam("compliance_controller/du_max", du_max_);
+
+    robot_ = new Robot(ee_frame);
+    std::cout << "Robot Init" << std::endl;
 
     // read in error clipping stuff
     nh_.getParam("compliance_controller/clip_error", clip_error_);
@@ -33,29 +44,49 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
     nh_.getParam("compliance_controller/pos_repulse", pos_repulse_);
     nh_.getParam("compliance_controller/rot_repulse", rot_repulse_);
     stop_till_new_goal_ = true;
-
+    std::cout << "Read in collision stuff" << std::endl;
+    // read in intergral stuff
+    nh_.getParam("compliance_controller/use_integral_error", use_i_);
     // read in controller kp and kd from parameter server
     std::vector<double> k_holder, kd_holder;
     nh_.getParam("compliance_controller/kp", k_holder);
     nh_.getParam("compliance_controller/kd", kd_holder);
     kp_ = Eigen::Matrix<double, 6, 6>();
     kd_ = Eigen::Matrix<double, 6, 6>();
+    ki_ = Eigen::Matrix<double, 6, 6>();
     kp2d_ = Eigen::Matrix<double, 6, 6>();
-    SetGains(k_holder, kd_holder);
+    std::cout << "Before If" << std::endl;
+    if(use_i_){
+        std::cout << "use_i is true" << std::endl;
+        nh_.getParam("compliance_controller/clip_i", clip_i_);
+        if(clip_i_){
+           nh_.getParam("compliance_controller/max_trans_i", max_i_trans_);
+           nh_.getParam("compliance_controller/max_rot_i", max_i_rot_);
+        }
+        std::vector<double> ki_holder;
+        nh_.getParam("compliance_controller/ki", ki_holder);
+        std::cout << "About to set gains" << std::endl;
+        SetGains(k_holder, kd_holder, ki_holder);
+    } else{
+        std::cout << "About to set gains" << std::endl;
+        SetGains(k_holder, kd_holder);
+    }
 
-    std::string ee_state_topic, joint_state_topic, effort_cmd_topic, ee_frame;
-    nh_.getParam("compliance_controller/joint_state_topic", joint_state_topic);
-    nh_.getParam("compliance_controller/ee_state_topic", ee_state_topic);
-    nh_.getParam("compliance_controller/effort_cmd_topic", effort_cmd_topic);
-    nh_.getParam("compliance_controller/ee_frame", ee_frame);
-
-    robot_ = new Robot(ee_frame);
-
+    // read in null space stuff
+    nh_.getParam("compliance_controller/use_nullspace", use_null_space_);
+    if( use_null_space_ ){
+        nh_.getParam("compliance_controller/nullspace_stiffness", null_space_stiffness_);
+        std::vector<double> ns_jnt_holder;
+        nh_.getParam("compliance_controller/nullspace_joints", ns_jnt_holder);
+        null_jnts_ = Vector6d(ns_jnt_holder.data());
+    }
     std::cout << "ee_state_topic:" << ee_state_topic << std::endl;
     std::cout << "joint_state_topic:" << joint_state_topic << std::endl;
     std::cout << "effort_cmd_topic:" << effort_cmd_topic << std::endl;
 
     nh_.getParam("compliance_controller/simulate", sim_);
+    std::cout << "Integral Error:  " << (use_i_ ? "on":"off") << std::endl;
+    std::cout << "Nullspace Bias:  " << (use_null_space_ ? "on":"off") << std::endl;
     std::cout << "Sim:  " << (sim_ ? "on":"off") << std::endl;
     std::cout << "Clip_error  " << (clip_error_ ? "on":"off") << std::endl;
     std::cout << "Use self-collision checking  " << (check_self_collision_ ? "on":"off") << std::endl;
@@ -73,6 +104,9 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
         std::cout << "Interrupt topic:" << ft_interrupt_topic << std::endl;
         ft_interrupt_sub_ = nh_.subscribe(ft_interrupt_topic, 1, &ComplianceController::ftInterruptCB, this);
     }
+    nh_.getParam("compliance_controller/comp_friction", comp_friction_);
+
+    old_u_ << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
 
     jnt_state_sub_ = nh_.subscribe(joint_state_topic, 1, &ComplianceController::jntStateCallback, this);
     goal_pose_sub_ = nh_.subscribe("compliance_controller/command", 1, &ComplianceController::goalCallback, this);
@@ -84,24 +118,57 @@ ComplianceController::ComplianceController(ros::NodeHandle nh):
 bool ComplianceController::setGains(set_gains::Request &req,
                             set_gains::Response &res){
           
-    if(req.new_kps.size() != 6 || req.new_kds.size() != 6){
+    if(req.new_kps.size() != 6 || req.new_kds.size() != 6  ||
+        (use_i_ && req.new_kis.size() != 6)){
         res.success=false;
         res.message = "Wrong number of gains";
     }
-    SetGains(req.new_kps, req.new_kds);
+    if( use_i_ ){
+        SetGains(req.new_kps, req.new_kds, req.new_kis);
+    } else{
+        SetGains(req.new_kps, req.new_kds);
+    }
     res.success = true;
     res.message = "New gains set!";
     return true;                      
 }
 
-void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<double> kd_holder){
-    std::cout << "Got to printout" << std::endl;
+
+void ComplianceController::SetGains(std::vector<double> k_holder, 
+                                    std::vector<double> kd_holder,
+                                    std::vector<double> ki_holder){
+    for(int i = 0; i < 6; i++){
+        for(int j=0; j < 6; j++){
+            if( i == j){
+                kp_(i,j) = k_holder[i];
+                kd_(i,j) = kd_holder[i];
+                if(kp_(i,j) > 0.0){
+                    kp2d_(i,j) = kd_(i,j) / kp_(i,j);
+                }
+                ki_(i,j) = ki_holder[i];
+            }else{
+                kp_(i,j) = 0.0;
+                kd_(i,j) = 0.0;
+                kp2d_(i,j) = 0.0;
+                ki_(i,j) = 0.0;
+            }
+        }
+    }
+    std::cout << "Kp:\n" << kp_ 
+              << "\nKd:\n" << kd_ 
+              << "\nKi:\n" << ki_ << std::endl;
+}
+
+void ComplianceController::SetGains(std::vector<double> k_holder, 
+                                    std::vector<double> kd_holder){
     for(int i = 0; i < 6; i ++){
         for(int j=0; j < 6; j++){
             if( i == j){
                 kp_(i,j) = k_holder[i];
                 kd_(i,j) = kd_holder[i];
-                kp2d_(i,j) = kd_(i,j) / kp_(i,j);
+                if(kp_(i,j) > 0.0){
+                    kp2d_(i,j) = kd_(i,j) / kp_(i,j);
+                }
             }else{
                 kp_(i,j) = 0.0;
                 kd_(i,j) = 0.0;
@@ -109,7 +176,7 @@ void ComplianceController::SetGains(std::vector<double> k_holder, std::vector<do
             }
         }
     }
-    std::cout << "Kp:\n" << kp_ << "\n  kd:\n" << kd_ << std::endl;
+    std::cout << "Kp:\n" << kp_ << "\nKd:\n" << kd_ << std::endl;
 
 }
 
@@ -127,7 +194,7 @@ void ComplianceController::goalCallback(std_msgs::Float64MultiArray msg){
                                     msg.data[4], msg.data[5]); // w, x, y, z
     }
     stop_till_new_goal_ = false;
-    std::cout << "New Goal:" << goal_pose_.transpose() << std::endl;
+    //std::cout << "New Goal:" << goal_pose_.transpose() << std::endl;
 
 }
 
@@ -180,12 +247,12 @@ void ComplianceController::calcPoseError(){
     }
     pose_error_.tail(3) << orient_error_.x(), orient_error_.y(), orient_error_.z();
     if(clip_error_){
-        for(int i = 0; i < 3; i++){
+        for(int i=0; i < 3; i++){
             pose_error_[i] = clamp(pose_error_[i], -trans_max_error_, trans_max_error_);
             pose_error_[i+3] = clamp(pose_error_[i+3], -rot_max_error_, rot_max_error_);
         }
-    }
-    //std::cout << pose_error_.transpose() << std::endl;
+    }    
+    std::cout << "Pose Error:" << pose_error_.head(3).transpose() << " " << Eigen::AngleAxisd(orient_error_).angle() << std::endl;
     /* below is included in franka controllers but doesn't make sense to me
     pose_error_.tail(3) << -transform.linear() * error_.tail(3); */ 
 }
@@ -201,7 +268,7 @@ void ComplianceController::checkSelfCollision(Eigen::MatrixXd Ja){
         //       << "collision" << std::endl;
 
     Vector6d qdot_cc; qdot_cc << 0,0,0,0,0,0;
-    if( collision_result.collision && !stop_on_collision_){
+    /*if( collision_result.collision && !stop_on_collision_){
         collision_detection::CollisionResult::ContactMap::const_iterator it;
         for( it = collision_result.contacts.begin(); 
             it != collision_result.contacts.end();
@@ -230,7 +297,7 @@ void ComplianceController::checkSelfCollision(Eigen::MatrixXd Ja){
             }
         }
         std::cout << "qdot_cc:" << qdot_cc.transpose() << std::endl;
-    }
+    }*/
     if(collision_result.collision && stop_on_collision_){
         stop_till_new_goal_ = true;
         pose_error_ *= 0.0;
@@ -276,31 +343,78 @@ void ComplianceController::ftInterruptCB(bravo_ft_sensor::FT_Interrupt msg){
     is_safe_ = msg.is_safe;
 }
 
+void ComplianceController::saturateJntTorques(){
+    //std::cout << "Raw Torques:" << u_.transpose() << std::endl;
+    for(int i = 0; i < 6; i++){
+        double diff = u_[i] - old_u_[i];
+        u_[i] = old_u_[i] + clamp(diff, -du_max_, du_max_);
+    }
+    old_u_ = u_;
+    //std::cout << "Sat Torques:" << u_.transpose() << std::endl;
+}
+
 void ComplianceController::jntStateCallback(sensor_msgs::JointState msg){
     // update state
     robot_->setState(msg);
+    //std::cout << "Jnt callback" << std::endl;
     if( running_ ){
         // get useful values
         Eigen::MatrixXd J = robot_->getJacobian();
         Eigen::MatrixXd Ja = robot_->getAnalyticJacobian(J);
+        q_ = robot_->getJntAngles();
         dq_ = robot_->getJntVels();
 
         // calculate error
         calcPoseError();
-
+        //std::cout << "Got error" << std::endl;
         // check for collision
         if( check_self_collision_){
             checkSelfCollision(Ja);
         }
 
+        //std::cout << "Checked collision" << std::endl;//std::cout << "Got gravity" << std::endl;
+        if( use_i_ ){
+            error_i_ += pose_error_;
+            if( clip_i_){
+                for( int i=0; i<3; i++){
+                    error_i_[i] = clamp(error_i_[i], -max_i_trans_, max_i_trans_);
+                    error_i_[i+3] = clamp(error_i_[i+3], -max_i_rot_, max_i_rot_);
+                }
+            }
+            //std::cout << kp_ << Ja.transpose() << std::endl;
+            u_ = Ja.transpose() * 
+                    (-kp_ * pose_error_ - kd_ * (Ja * dq_) - ki_ * error_i_);
+        } else {
+            // get control
+            //std::cout << kp_ << Ja.transpose() << std::endl;
+            u_ = Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
+        }
+
+        if(use_null_space_){
+            Eigen::MatrixXd Jpinv = robot_->getPsudoInv(Ja.transpose());//, Jpinv);
+            //std::cout << Jpinv << std::endl;
+            Vector6d qe;
+            qe << null_jnts_ - q_;
+            //std::cout << qe.transpose() << "\n" << dq_.transpose() << std::endl;
+            u_ += (Eigen::MatrixXd::Identity(6,6) - Ja.transpose() * Jpinv) * 
+                        (null_space_stiffness_ * qe 
+                        - 2.0 * sqrt(null_space_stiffness_) * dq_);
+        }
+        //std::cout << "Pre-friction:" << u_.transpose() << std::endl;
+        if( comp_friction_){
+            u_ += robot_->getFriction(u_, dq_);
+            
+        }
         // get non-linearities
-        Vector6d g(robot_->getGravity().data());
-        
-        // get control
-        u_ = g + Ja.transpose() * (-kp_ * pose_error_ - kd_ * (Ja * dq_));
+        //Vector6d g(robot_->getGravity().data()); // this is just gravity
+        Vector6d g(robot_->getTorques().data()); // this is coriollis + gravity
+        u_ += g;
+
+        saturateJntTorques();
         //std::cout << "u:" << u_.transpose() << std::endl;
         // convert to effortCmd and publish
         eff_cmd_pub_.publish(toEffortCmd(u_));
+        //std::cout << "Pubbed" << std::endl;
     }
 
 }
@@ -331,6 +445,7 @@ bool ComplianceController::demoComplianceControl(
 bool ComplianceController::toggleComplianceControl(
     std_srvs::SetBool::Request &req,
     std_srvs::SetBool::Response &res){
+        error_i_ *= 0.0;
         if(req.data && !running_){
             running_ = true;
             // get list of all loaded controllers

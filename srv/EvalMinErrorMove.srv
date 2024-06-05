@@ -1,0 +1,6 @@
+float64 lin_delta
+float64 rot_delta
+string exp_name
+---
+bool success
+string message

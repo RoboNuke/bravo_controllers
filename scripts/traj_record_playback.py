@@ -1,6 +1,6 @@
 import rospy
 from std_srvs.srv import Trigger
-from bravo_controllers.srv import StartPlayback
+from bravo_controllers.srv import StartPlayback, ToggleRecording
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 import yaml
@@ -13,7 +13,7 @@ def recordSRV(srv):
     global recording, traj
     if recording:
         recording = False
-        with open('/home/hunter/traj_drawn_back.yaml', 'w') as file:
+        with open(srv.filepath, 'w') as file:
             yaml.dump(traj, file)
     else:
         traj = []
@@ -41,6 +41,7 @@ def playbackSRV(srv):
     if srv.steps == 0:
         msg = Float64MultiArray()
         for pt in traj:
+            print(pt)
             msg.data = pt
             for j in range(len(pt)):
                 out_traj.data.append(pt[j])
@@ -71,6 +72,6 @@ goalPub = rospy.Publisher("/bravo/compliance_controller/command", Float64MultiAr
 
 if __name__=="__main__":
     rospy.init_node("traj_record_n_playback")
-    recSRV = rospy.Service('record_ee_state', Trigger, recordSRV)
+    recSRV = rospy.Service('record_ee_state', ToggleRecording, recordSRV)
     pbSRV = rospy.Service('playback_ee_trajectory', StartPlayback, playbackSRV)
     rospy.spin()

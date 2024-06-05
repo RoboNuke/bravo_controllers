@@ -22,7 +22,8 @@ class Robot {
         Eigen::MatrixXd getJacobian();
         Eigen::MatrixXd getJacobian(Eigen::Vector3d ref_pt, std::string link_name);
         Eigen::MatrixXd getAnalyticJacobian(Eigen::MatrixXd j);
-        Eigen::MatrixXd getPsudoInv(Eigen::MatrixXd j);
+        Eigen::MatrixXd getPsudoInv(const Eigen::MatrixXd& j);//, Eigen::MatrixXd& j_pinv);
+        Vector6d getFriction(Vector6d torques, Vector6d dq);
         Vector6d getJntAngles();
         Eigen::VectorXd getJntVels(); 
         std::vector<double> getGravity();

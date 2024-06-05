@@ -1,0 +1,37 @@
+controller_performance:
+  full_state_topic: "/bravo/ee_state"
+  controller_cmd_topic: "/bravo/compliance_controller/command"
+  toggle_controller_topic: "compliance_controller/enable_compliance_controller"
+  default_orient: [1.0, 0.0, 0.0, 0.0]
+  center_ws: [0.4, 0.0, 0.10, 1.0, 0.0, 0.0, 0.0]
+  path_to_save_folder: "/home/hunter/catkin_ws/testing/"
+  
+  traj_test:
+    types: ["circle", "square"]
+    params:
+      circle:
+        r: 0.25
+        dy: 0.0
+        dt: 0.01
+        n: 100
+        traj_n: 5
+        traj_rev: true
+      square:
+        sx: 0.25
+        sy: 0.0
+        sz: 0.25
+        dt: 0.01
+        n: 100
+        traj_n: 5
+        traj_rev: true
+
+  Point_to_Point_test:
+    a: [0.337, -0.15, 0.2]
+    b: [0.497,  0.15, 0.1]
+    n: 5
+    traj_rev: true
+
+  Min_Error_to_Move_test:
+    lin_delta: 0.001
+    rot_delta: 0.01
+

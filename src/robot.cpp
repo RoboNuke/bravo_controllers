@@ -181,7 +181,7 @@ std::vector<double> Robot::getTorques(bool with_accel){
     std::vector<double> angles(n, 0.0);
     std::vector<double> vels(n, 0.0);
     std::vector<double> accels(n, 0.0);
-    std::vector<geometry_msgs::Wrench> wrenches(8, geometry_msgs::Wrench());
+    std::vector<geometry_msgs::Wrench> wrenches(num_seg_, geometry_msgs::Wrench());
     // copy joint angles
     state_->copyJointGroupPositions("arm", angles);
     state_->copyJointGroupVelocities("arm", vels);
@@ -218,11 +218,28 @@ Eigen::MatrixXd Robot::getAnalyticJacobian(Eigen::MatrixXd Jg)
     return Ja;
 }
 
-Eigen::MatrixXd Robot::getPsudoInv(Eigen::MatrixXd j)
+Eigen::MatrixXd Robot::getPsudoInv(const Eigen::MatrixXd& j)//, Eigen::MatrixXd& j_pinv)
 {
-    Eigen::MatrixXd jT = j.transpose();
-    Eigen::MatrixXd pInv = jT * (j * jT).inverse();
-    return pInv;
+    //Eigen::MatrixXd jT = j.transpose();
+    //Eigen::MatrixXd pInv = jT * (j * jT).inverse();
+    //return pInv;
+    bool damped = true;
+    double lambda = damped ? 0.2 : 0.0;
+    //std::cout << "1" << std::endl;
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(j, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    //std::cout << "2" << std::endl;
+    Eigen::JacobiSVD<Eigen::MatrixXd>::SingularValuesType sing_vals = svd.singularValues();
+    //std::cout << "3" << std::endl;
+    Eigen::MatrixXd S = j;
+    S.setZero();
+    //std::cout << "4" << std::endl;
+    for(int i = 0; i < sing_vals.size(); i++)
+        S(i,i) = (sing_vals(i)) / (sing_vals(i) * sing_vals(i) + lambda * lambda);
+    
+    //std::cout << "5" << std::endl;
+    Eigen::MatrixXd j_pinv = Eigen::MatrixXd(svd.matrixV() * S.transpose() * svd.matrixU().transpose());
+    //std::cout << "6" << std::endl;
+    return j_pinv;
 }
 
 std::vector<double> Robot::torqueToCurrent(std::vector<double> torques){
@@ -265,5 +282,16 @@ std::vector<double> Robot::torqueToCurrent(Eigen::VectorXd torques){
     return torqueToCurrent(t);
 }
 
+Vector6d Robot::getFriction(Vector6d torques, Vector6d dq){
+    Vector6d friction;
+    for(int i = 0; i < 6; i++){
+        if( torques[i] > 0.0001){
+            friction[i] = 9.48 * 0.5;
+        } else if(torques[i] < 0.0001){
+            friction[i] = -9.48 * 0.5;
+        }
+    }
+    return friction;
+}
 
 }; // bravo_controllers ns

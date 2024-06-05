@@ -65,6 +65,10 @@ catkin_python_setup()
    FILES
    set_gains.srv
    StartPlayback.srv
+   ToggleRecording.srv
+   EvalMinErrorMove.srv
+   EvalPoint2Point.srv
+   EvalTrajectory.srv
  )
 
 ## Generate actions in the 'action' folder
@@ -171,6 +175,7 @@ target_link_libraries(compliance_controller
 catkin_install_python(PROGRAMS 
   scripts/ee_state_publisher.py
   scripts/traj_record_playback.py
+  scripts/controller_performance.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 ## Add cmake target dependencies of the library
@@ -251,4 +256,4 @@ catkin_install_python(PROGRAMS
 # endif()
 
 ## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
+catkin_add_nosetests(tests/test_controller_performance.py)

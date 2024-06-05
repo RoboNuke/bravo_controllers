@@ -1,0 +1,16 @@
+string traj_type
+float64 r_circle
+float64 dx
+float64 dy
+float64 dz
+float64 sx
+float64 sy
+float64 sz
+int32 n_reps
+int32 traj_n
+bool traj_rev
+float64 dt 
+string exp_name
+---
+bool success
+string message
